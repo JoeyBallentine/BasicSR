@@ -12,7 +12,7 @@ Click for detailed explanations for each option file.
 2.  [train_esrgan.json](#train_esrgan_json) (also for training srgan)
 3.  [train_sftgan.json](#train_sftgan_json)
 
-## train_sr_json
+## train_sr.json
 
 ```json
 {
@@ -82,7 +82,7 @@ Click for detailed explanations for each option file.
 }
 ```
 
-## train_esrgan_json
+## train_esrgan.json
 
 ```json
 {
@@ -174,7 +174,7 @@ Click for detailed explanations for each option file.
 }
 ```
 
-## train_sftgan_json
+## train_sftgan.json
 
 ```json
 {
