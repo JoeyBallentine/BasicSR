@@ -28,7 +28,7 @@ def main():
     for phase, dataset_opt in sorted(opt['datasets'].items()):
         test_set = create_dataset(dataset_opt)
         test_loader = create_dataloader(test_set, dataset_opt)
-        logger.info('Number of test images in [{:s}]: {:d}'.format(dataset_opt['name'], len(test_set)))
+        logger.info('Number of test images in [{:s}]: {:,d}'.format(dataset_opt['name'], len(test_set)))
         test_loaders.append(test_loader)
         # Temporary, will turn znorm on for all the datasets. Will need to introduce a variable for each dataset
         # and differentiate each one later in the loop.
