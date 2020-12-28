@@ -48,11 +48,11 @@ def parse2lists(types):
     return types
 
 
-def parse(opt_path, is_train=True):
+def parse(opt_path: str, is_train: bool = True):
     """Parse options file.
     Args:
         opt_path (str): Option file path. Can be JSON or YAML
-        is_train (str): Indicate whether in training or not. Default: True.
+        is_train (bool): Indicate whether in training or not. Default: True.
     Returns:
         (dict): Parsed Options
     """
