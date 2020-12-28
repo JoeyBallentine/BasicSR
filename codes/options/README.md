@@ -1,17 +1,20 @@
 # Configurations
-- Use **json** files to configure options.
-- Convert the json file to python dict.
-- Support `//` comments and use `null` for `None`.
+
+-   Use **YAML** to configure option files. JSON is supported, but may be phased out over time.
+-   Comments in JSON uses `//`, YAML uses `#`.
+-   `None` in JSON uses `null`, YAML uses `~`.
 
 ## Table
-Click for detailed explanations for each json file.
 
-1. [train_sr.json](#train_sr_json)
-1. [train_esrgan.json](#train_esrgan_json) (also for training srgan)
-1. [train_sftgan.json](#train_sftgan_json)
+Click for detailed explanations for each option file.
+
+1.  [train_sr.json](#train_sr_json)
+2.  [train_esrgan.json](#train_esrgan_json) (also for training srgan)
+3.  [train_sftgan.json](#train_sftgan_json)
 
 ## train_sr_json
-```c++
+
+```json
 {
   "name": "debug_001_RRDB_PSNR_x4_DIV2K" //  leading 'debug_' enters the 'debug' mode. Please remove it during formal training
   , "use_tb_logger": true // use tensorboard_logger, ref: `https://github.com/xinntao/BasicSR/tree/master/codes/utils`
@@ -78,8 +81,10 @@ Click for detailed explanations for each json file.
   }
 }
 ```
+
 ## train_esrgan_json
-```c++
+
+```json
 {
   "name": "debug_002_RRDB_ESRGAN_x4_DIV2K" // leading 'debug_' enters the 'debug' mode. Please remove it during formal training
   , "use_tb_logger": true // use tensorboard_logger, ref: `https://github.com/xinntao/BasicSR/tree/master/codes/utils`
@@ -168,9 +173,10 @@ Click for detailed explanations for each json file.
   }
 }
 ```
+
 ## train_sftgan_json
 
-```c++
+```json
 {
   "name": "debug_003_SFTGANx4_OST" // leading 'debug_' enters the 'debug' mode. Please remove it during formal training
   , "use_tb_logger": false // use tensorboard_logger, ref: `https://github.com/xinntao/BasicSR/tree/master/codes/utils`
@@ -246,4 +252,4 @@ Click for detailed explanations for each json file.
     , "save_checkpoint_freq": 2e3
   }
 }
-'''
+```
