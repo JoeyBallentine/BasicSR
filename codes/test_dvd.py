@@ -48,6 +48,7 @@ def main():
         test_results = {"psnr": [], "ssim": [], "psnr_y": [], "ssim_y": []}
 
         for data in test_loader:
+            # todo ; shouldn't it be `is None`?
             need_hr = test_loader.dataset.opt['dataroot_HR'] is not None
 
             model.feed_data(data, need_HR=need_hr)
