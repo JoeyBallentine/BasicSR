@@ -72,7 +72,7 @@ def main():
             if need_hr:
                 # if znorm the image range is [-1,1], Default: Image range is [0,1]
                 # testing, each "dataset" can have a different name (not train, val or other)
-                gt_img = tensor2img(visuals['HR'], denormalize=znorm)  # uint8
+                gt_img = tensor2np(visuals['HR'], denormalize=znorm)  # uint8
                 gt_img = gt_img / 255.
                 sr_img = sr_img / 255.
 
