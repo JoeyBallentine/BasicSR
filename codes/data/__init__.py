@@ -21,8 +21,7 @@ def create_dataloader(dataset: torch.utils.data.Dataset, dataset_opt: dict) -> t
     :param dataset: PyTorch Dataset
     :param dataset_opt: Options to pass to the Dataloader
     """
-    phase = dataset_opt['phase']
-    if phase == 'train':
+    if dataset_opt['phase'] == 'train':
         return torch.utils.data.DataLoader(
             dataset,
             batch_size=dataset_opt['batch_size'],
