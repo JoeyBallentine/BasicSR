@@ -4,7 +4,7 @@ import logging
 import torch.utils.data
 
 from codes.data.DVDDataset import DVDDataset
-from codes.data.DVDDataset import DVDIDataset
+from codes.data.DVDIDataset import DVDIDataset
 from codes.data.LRHRC_dataset import LRHRDataset as LRHRCDataset
 from codes.data.LRHROTF_dataset import LRHRDataset as LRHROTFDataset
 from codes.data.LRHRPBR_dataset import LRHRDataset as LRHRPBRDataset
