@@ -112,7 +112,7 @@ def parse(opt_path: str, is_train: bool = True):
             opt = yaml.load(f, Loader=Loader)
 
     opt['is_train'] = is_train
-    scale = opt.get('scale', 1)
+    scale = opt.get('scale', 4)
     bm = opt.get('batch_multiplier', None)
 
     # datasets
