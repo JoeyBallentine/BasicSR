@@ -214,7 +214,7 @@ class VDIOFNet(nn.Module):
         # return y_full, z_full
 
 
-class VDSPCNet(nn.Module):
+class VDSPCNet_og(nn.Module):
     '''
     Video Deinterlacing with Sub-Pixel Convolution (VDSPC)
     '''
@@ -230,6 +230,33 @@ class VDSPCNet(nn.Module):
         HR_conv0 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=act_type)
         HR_conv1 = B.conv_block(nf, out_nc, kernel_size=3, norm_type=None, act_type=None)
         self.inpaint = B.sequential(fea_conv, upsample, HR_conv0, HR_conv1) # B.ShortcutBlock(B.sequential(RRDB, LR_conv))
+        
+    def forward(self, x):
+        # x: N, C, T, H, W
+        n, c, t, h, w = x.shape
+        x = x.view(n,c*t,h,w) # N, CT, H, W
+        output = self.inpaint(x)
+
+        return output
+
+class VDSPCNet(nn.Module):
+    '''
+    Video Deinterlacing with Sub-Pixel Convolution (VDSPC)
+    '''
+    def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', n_frames=3):
+        super(VDSPCNet, self).__init__()
+
+        # Inpaint step
+        # We essentially create a mini ESRGAN arch here with an upcomv block instead of an RRDB block
+        fea_conv = B.conv_block(in_nc*n_frames, nf, kernel_size=3, norm_type=None, act_type=None)
+        # RRDB = R.RRDB(nf) could potentially use this later
+        LR_conv = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
+        LR_conv_2 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
+        LR_conv_3 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
+        # upsample = B.upconv_block(nf, nf, upscale_factor=(2, 1), kernel_size=3, act_type=act_type)
+        HR_conv0 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=act_type)
+        HR_conv1 = B.conv_block(nf, out_nc, kernel_size=3, norm_type=None, act_type=None)
+        self.inpaint = B.sequential(fea_conv, LR_conv, LR_conv_2, LR_conv_3, HR_conv0, HR_conv1) # B.ShortcutBlock(B.sequential(RRDB, LR_conv))
         
     def forward(self, x):
         # x: N, C, T, H, W

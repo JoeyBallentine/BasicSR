@@ -275,7 +275,17 @@ class VidTrainsetLoader(Dataset):
             if self.shape == 'TCHW':
                 HR = HR.transpose(0,1) # Tensor, [T,C,H,W]
                 LR = LR.transpose(0,1) # Tensor, [T,C,H,W]
-        
+
+        # Duplicate frames to simulate what some cartoons do
+        if self.opt['frame_duping']:
+            t, _, _, _ = LR.shape       
+            if random.random() < 0.25:
+                idx = np.random.randint(1, t-1)
+                offset = np.random.randint(-1, 1)
+                LR[idx + offset, :, :, :] = LR[idx, :, :, :]
+                HR[idx + offset, :, :, :] = HR[idx, :, :, :]
+                # TODO: Do this better so it pushes extra frames aside when n_frames > 3
+
         # Convert LR frames into LR fields (for interlacing)
         if self.opt['lr_field_alternation']:
             field_position = np.random.choice(['up', 'down'])
@@ -288,6 +298,18 @@ class VidTrainsetLoader(Dataset):
                     offset = 1 if even else 0
                 LR[i_frame, :, :lr_h//2, :] = LR[i_frame, :, offset::2, :]
             LR = LR[:, :, :lr_h//2, :]
+
+        # Add voidweaving to LR
+        if self.opt['lr_field_voidweave']:
+            field_position = np.random.choice(['up', 'down'])
+            t, _, lr_h, lr_w = LR.shape
+            for i_frame in range(t):
+                even = i_frame % 2 == 0
+                if field_position == 'down':
+                    offset = 0 if even else 1
+                else:
+                    offset = 1 if even else 0
+                LR[i_frame, :, offset::2, :] = torch.full((3, lr_h//2, lr_w), -1)
 
         # generate Cr, Cb channels using bicubic interpolation
         #TODO: check, it might be easier to return the whole image and separate later when needed
@@ -437,6 +459,18 @@ class VidTestsetLoader(Dataset):
             LR = LR.view(c,t,h_LR,w_LR) # Tensor, [C,T,H,W]
             if self.shape == 'TCHW':
                 LR = LR.transpose(0,1) # Tensor, [T,C,H,W]
+                
+        # Add voidweaving to LR
+        if self.opt['lr_field_voidweave']:
+            field_position = np.random.choice(['up', 'down'])
+            t, _, lr_h, lr_w = LR.shape
+            for i_frame in range(t):
+                even = i_frame % 2 == 0
+                if field_position == 'down':
+                    offset = 0 if even else 1
+                else:
+                    offset = 1 if even else 0
+                LR[i_frame, :, offset::2, :] = torch.full((3, lr_h//2, lr_w), -1)
 
         if self.y_only and self.srcolors:
             # generate Cr, Cb channels using bicubic interpolation

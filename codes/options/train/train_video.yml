@@ -34,7 +34,9 @@ datasets:
     lr_downscale: true # false
     lr_downscale_types: ["linear", "cubic", "matlab_bicubic"] # select from ["nearest", "linear", "cubic", "area", "lanczos4", "linear_exact", "matlab_bicubic", "realistic"] #scale_algos #scaling interpolation options
 
+    # frame_duping: true # on-the-fly frame duping to simulate animation or pulldown
     # lr_field_alternation: true # on-the-fly frame squashing into alternative (top and bottom) fields for deinterlacing
+    # lr_field_voidweave: true # on-the-fly voidweaving
     
     # Rotations augmentations:
     # use_flip: true # flip images
