@@ -250,6 +250,7 @@ class VidTrainsetLoader(Dataset):
             #TODO: use variables from config
             LR, HR, LR_bicubic, HR_center = augmentation()([LR, HR, LR_bicubic, HR_center])
 
+
         # tmp_vis(HR, False)
         # tmp_vis(LR, False)
         # tmp_vis(LR_bicubic, False)
@@ -274,6 +275,19 @@ class VidTrainsetLoader(Dataset):
             if self.shape == 'TCHW':
                 HR = HR.transpose(0,1) # Tensor, [T,C,H,W]
                 LR = LR.transpose(0,1) # Tensor, [T,C,H,W]
+        
+        # Convert LR frames into LR fields (for interlacing)
+        if self.opt['lr_field_alternation']:
+            field_position = np.random.choice(['up', 'down'])
+            t, _, lr_h, _ = LR.shape
+            for i_frame in range(t):
+                even = i_frame % 2 == 0
+                if field_position == 'down':
+                    offset = 0 if even else 1
+                else:
+                    offset = 1 if even else 0
+                LR[i_frame, :, :lr_h//2, :] = LR[i_frame, :, offset::2, :]
+            LR = LR[:, :, :lr_h//2, :]
 
         # generate Cr, Cb channels using bicubic interpolation
         #TODO: check, it might be easier to return the whole image and separate later when needed
