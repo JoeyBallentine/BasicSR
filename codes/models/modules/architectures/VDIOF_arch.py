@@ -240,12 +240,12 @@ class VDSPCNet_og(nn.Module):
 
         return output
 
-class VDSPCNet(nn.Module):
+class VDSPCNet_og(nn.Module):
     '''
     Video Deinterlacing with Sub-Pixel Convolution (VDSPC)
     '''
     def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', n_frames=3):
-        super(VDSPCNet, self).__init__()
+        super(VDSPCNet_og, self).__init__()
 
         # Inpaint step
         # We essentially create a mini ESRGAN arch here with an upcomv block instead of an RRDB block
@@ -267,16 +267,31 @@ class VDSPCNet(nn.Module):
 
         return output
 
-class VDDSPCNet(nn.Module):
+class VDSPCNet(nn.Module):
     '''
     Video Deinterlacing with Deformable Sub-Pixel Convolution (VDDSPC)
     '''
-    def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', n_frames=3):
-        super(VDDSPCNet, self).__init__()
+    def __init__(self, in_nc=3, deformable_groups=1, out_nc=3, nf=64, act_type='leakyrelu', n_frames=3):
+        super(VDSPCNet, self).__init__()
+
+        self.conv_offset = nn.Conv2d(
+            in_nc*n_frames,
+            deformable_groups * 2 * 3 * 3,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=True)
+        self.conv_offset.weight.data.zero_()
+        self.conv_offset.bias.data.zero_()
+
+    # def forward(self, x):
+    #     offset = self.conv_offset(x)
+    #     return deform_conv(x, offset, self.weight, self.stride, self.padding,
+    #                        self.dilation, self.groups, self.deformable_groups)
 
         # Inpaint step
-        fea_conv = B.conv_block(in_nc*n_frames, nf, kernel_size=3, norm_type=None, act_type=None)
-        dcn_conv = O.DeformConv2d(nf, nf, kernel_size=3, padding=1)
+        #self.fea_conv = B.conv_block(in_nc*n_frames, nf, kernel_size=3, norm_type=None, act_type=None)
+        self.dcn_conv = O.DeformConv2d(in_nc*n_frames, nf, kernel_size=3, padding=1)
         # RRDB = R.RRDB(nf) could potentially use this later
         LR_conv = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
         LR_conv_2 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
@@ -284,12 +299,16 @@ class VDDSPCNet(nn.Module):
         # upsample = B.upconv_block(nf, nf, upscale_factor=(2, 1), kernel_size=3, act_type=act_type)
         HR_conv0 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=act_type)
         HR_conv1 = B.conv_block(nf, out_nc, kernel_size=3, norm_type=None, act_type=None)
-        self.inpaint = B.sequential(fea_conv, dcn_conv, LR_conv, LR_conv_2, LR_conv_3, HR_conv0, HR_conv1) # B.ShortcutBlock(B.sequential(RRDB, LR_conv))
+        self.inpaint = B.sequential(LR_conv, LR_conv_2, LR_conv_3, HR_conv0, HR_conv1) # B.ShortcutBlock(B.sequential(RRDB, LR_conv))
         
     def forward(self, x):
         # x: N, C, T, H, W
         n, c, t, h, w = x.shape
         x = x.view(n,c*t,h,w) # N, CT, H, W
-        output = self.inpaint(x)
+        #output = self.inpaint(x)
+
+        offset = self.conv_offset(x)
+        deform = self.dcn_conv(x, offset=offset)
+        output = self.inpaint(deform)
 
         return output
