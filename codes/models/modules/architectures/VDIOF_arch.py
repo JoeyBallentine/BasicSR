@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.ops as O
 from . import block as B
 from . import RRDBNet_arch as R
 from models.modules.architectures.video import optical_flow_warp
@@ -239,7 +240,7 @@ class VDSPCNet_og(nn.Module):
 
         return output
 
-class VDSPCNet(nn.Module):
+class VDSPCNet_testing_currently(nn.Module):
     '''
     Video Deinterlacing with Sub-Pixel Convolution (VDSPC)
     '''
@@ -249,6 +250,33 @@ class VDSPCNet(nn.Module):
         # Inpaint step
         # We essentially create a mini ESRGAN arch here with an upcomv block instead of an RRDB block
         fea_conv = B.conv_block(in_nc*n_frames, nf, kernel_size=3, norm_type=None, act_type=None)
+        # RRDB = R.RRDB(nf) could potentially use this later
+        LR_conv = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
+        LR_conv_2 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
+        LR_conv_3 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
+        # upsample = B.upconv_block(nf, nf, upscale_factor=(2, 1), kernel_size=3, act_type=act_type)
+        HR_conv0 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=act_type)
+        HR_conv1 = B.conv_block(nf, out_nc, kernel_size=3, norm_type=None, act_type=None)
+        self.inpaint = B.sequential(fea_conv, LR_conv, LR_conv_2, LR_conv_3, HR_conv0, HR_conv1) # B.ShortcutBlock(B.sequential(RRDB, LR_conv))
+        
+    def forward(self, x):
+        # x: N, C, T, H, W
+        n, c, t, h, w = x.shape
+        x = x.view(n,c*t,h,w) # N, CT, H, W
+        output = self.inpaint(x)
+
+        return output
+
+class VDSPCNet(nn.Module):
+    '''
+    Video Deinterlacing with Deformable Sub-Pixel Convolution (VDDSPC)
+    '''
+    def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', n_frames=3):
+        super(VDSPCNet, self).__init__()
+
+        # Inpaint step
+        # fea_conv = B.conv_block(in_nc*n_frames, nf, kernel_size=3, norm_type=None, act_type=None)
+        fea_conv = O.DeformConv2d(in_nc*n_frames, nf, kernel_size=3, padding=1)
         # RRDB = R.RRDB(nf) could potentially use this later
         LR_conv = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
         LR_conv_2 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
