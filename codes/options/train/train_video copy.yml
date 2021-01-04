@@ -1,8 +1,8 @@
-name: debug_001_template # use "debug" or "debug_nochkp" in the name to run a test session and check everything is working. Does validation and state saving every 8 iterations.
+name: debug_VDOF-att2 # use "debug" or "debug_nochkp" in the name to run a test session and check everything is working. Does validation and state saving every 8 iterations.
 #name: 001_template # remove "debug" to run the real training session.
 use_tb_logger: true
-model: vsrgan
-scale: 4
+model: vdof
+scale: 1
 gpu_ids: [0]
 use_amp: true
 
@@ -10,17 +10,17 @@ use_amp: true
 datasets:
   train: 
     name: REDS
-    mode: VLRHR
-    dataroot_HR: '../datasets/train/hr' # high resolution / ground truth images
-    dataroot_LR: '../datasets/train/lr' # low resolution images. If there are missing LR images, they will be generated on the fly from HR
+    mode: INTERLACED
+    dataroot_progressive: 'C:\Users\joeyj\Documents\datasets\val_sharp\val\val_sharp' # high resolution / ground truth images
+    # dataroot_LR: '../datasets/train/lr' # low resolution images. If there are missing LR images, they will be generated on the fly from HR
     
     subset_file: null
     use_shuffle: true
     znorm: false # true | false # To normalize images in [-1, 1] range. Default = None (range [0,1]). Can use with activation function like tanh.
     n_workers: 4 # 0 to disable CPU multithreading, or an integrer representing CPU threads to use for dataloading
-    batch_size: 32
-    virtual_batch_size: 32
-    HR_size: 32 # patch size. Default: 128. Needs to be coordinated with the patch size of the features network
+    batch_size: 1
+    virtual_batch_size: 1
+    HR_size: 128 # patch size. Default: 128. Needs to be coordinated with the patch size of the features network
     image_channels: 3 # number of channels to load images in
     num_frames: 3 # number of frames to use to train the network (default: 3). Must coincide with "n_frames" in the network.
     random_reverse: true # augmentation to randomly revert the frame orders
@@ -31,11 +31,11 @@ datasets:
 
     # If manually configuring on the fly generation of LR: (else, it will automatically default to Matlab-like downscale algorithm (777) when/if required
     dataroot_kernels: '../training/kernels/results/' # location of the image kernels extracted with KernelGAN, for use with the "realistic" downscale type
-    lr_downscale: true # false
+    lr_downscale: false # false
     lr_downscale_types: ["linear", "cubic", "matlab_bicubic"] # select from ["nearest", "linear", "cubic", "area", "lanczos4", "linear_exact", "matlab_bicubic", "realistic"] #scale_algos #scaling interpolation options
 
     # frame_duping: true # on-the-fly frame duping to simulate animation or pulldown
-    # lr_field_alternation: true # on-the-fly frame squashing into alternative (top and bottom) fields for deinterlacing
+    #lr_field_alternation: true # on-the-fly frame squashing into alternative (top and bottom) fields for deinterlacing
     # lr_field_voidweave: true # on-the-fly voidweaving
     
     # Rotations augmentations:
@@ -52,25 +52,25 @@ datasets:
 
 path:
     strict: false # true | false 
-    root: 'D:/Code/GitHub/BasicSR'
-    pretrain_model_G: '../experiments/pretrained_models/video_x4.pth'
+    root: 'C:/Code/GitHub/BasicSR'
+    # pretrain_model_G: '../experiments/pretrained_models/video_x4.pth'
     #resume_state: '../experiments/debug_002_video_x4_REDS/training_state/16.state'
 
 # Generator options:
 network_G:
     # SOFVSR:
-    which_model_G: sofvsr_net
-    n_frames: 3 # number of frames the network will use to estimate the central frame (n-1)/2. Must coincide with "num_frames" in the dataset.
-    channels: 320 # feature extraction layer with 320 kernels of size 3 × 3
-    img_ch: 3 # # of input image channels: 3 for RGB and 1 for grayscale
-    # for SR network:
-    SR_net: rrdb #sofvsr | rrdb | pan
-    sr_nf: 64 # for rrdb or pan
-    sr_nb: 23 # for rrdb or pan
-    sr_gc: 32 # for rrdb
-    # sr_unf: 24 # for pan
-    sr_gaussian_noise: true # for rrdb
-    sr_plus: false # for rrdb
+    # which_model_G: sofvsr_net
+    # n_frames: 3 # number of frames the network will use to estimate the central frame (n-1)/2. Must coincide with "num_frames" in the dataset.
+    # channels: 320 # feature extraction layer with 320 kernels of size 3 × 3
+    # img_ch: 3 # # of input image channels: 3 for RGB and 1 for grayscale
+    # # for SR network:
+    # SR_net: rrdb #sofvsr | rrdb | pan
+    # sr_nf: 64 # for rrdb or pan
+    # sr_nb: 23 # for rrdb or pan
+    # sr_gc: 32 # for rrdb
+    # # sr_unf: 24 # for pan
+    # sr_gaussian_noise: true # for rrdb
+    # sr_plus: false # for rrdb
     # sr_sa: true # for pan
     # sr_upinter_mode: nearest # for pan
 
@@ -112,11 +112,11 @@ network_G:
     # n_frames: 3
 
     # VDOF:
-    # which_model_G: VDOF_net
-    # nf: 64
-    # in_nc: 3
-    # out_nc: 3
-    # channels: 320
+    which_model_G: VDOF_net
+    nf: 64
+    in_nc: 3
+    out_nc: 3
+    channels: 320
     
 # Discriminator options:
 network_D:
@@ -217,8 +217,8 @@ train:
     ofr_weight: [0.1, 0.2, 0.1, 0.01] #SOFVSR defaults: lambda1 = 0.1 (loss_L1), lambda2 = 0.2 (loss_L2), lambda3 = 0.1 (regularization), lambda4 = 0.01 (total)
     
     # Adversarial loss:
-    gan_type: vanilla # "vanilla" | "wgan-gp" | "lsgan" 
-    gan_weight: 5e-5 # 
+    # gan_type: vanilla # "vanilla" | "wgan-gp" | "lsgan" 
+    # gan_weight: 5e-5 # 
     # for wgan-gp
     # D_update_ratio: 1
     # D_init_iters: 0

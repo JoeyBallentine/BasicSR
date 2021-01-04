@@ -100,7 +100,8 @@ class OFRnet(nn.Module):
         x_L1 = self.pool(x)
         b, c, h, w = x_L1.size()
         input_L1 = torch.cat((x_L1, torch.zeros(b, 2, h, w).cuda()), 1)
-        optical_flow_L1 = self.RNN2(self.RNN1(input_L1))
+        one = self.RNN1(input_L1)
+        optical_flow_L1 = self.RNN2(one)
 
         image_shape = torch.unsqueeze(x[:, 0, :, :], 1).shape
         optical_flow_L1_upscaled = F.interpolate(optical_flow_L1, size=(image_shape[2],image_shape[3]), mode='bilinear', align_corners=False) * 2
@@ -312,3 +313,125 @@ class VDSPCNet(nn.Module):
         output = self.inpaint(deform)
 
         return output
+
+class VDOFNet(nn.Module):
+    '''
+    Video Deinterlacing with Optical Flow Warping (VDIOF)
+    '''
+    def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', channels=320, n_frames=3):
+        super(VDOFNet, self).__init__()
+
+        # Inpaint step
+        # We essentially create a mini ESRGAN arch here with an upcomv block instead of an RRDB block
+        # fea_conv = B.conv_block(in_nc, nf, kernel_size=3, norm_type=None, act_type=None)
+        # # RRDB = R.RRDB(nf) could potentially use this later
+        # # LR_conv = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=None, mode='CNA')
+        # upsample = B.upconv_block(nf, nf, upscale_factor=(2, 1), kernel_size=3, act_type=act_type)
+        # HR_conv0 = B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=act_type)
+        # HR_conv1 = B.conv_block(nf, out_nc, kernel_size=3, norm_type=None, act_type=None)
+        # self.inpaint = B.sequential(fea_conv, upsample, HR_conv0, HR_conv1) # B.ShortcutBlock(B.sequential(RRDB, LR_conv))
+
+        # Optical Flow Estimation Step
+        # Use motion estimation to restore center frame
+        self.OFR = OFRnet(channels, 3)
+
+        sr_in_nc=in_nc*((n_frames-1) +1)
+
+        body = []
+        body.append(nn.Conv2d(sr_in_nc, channels, 3, 1, 1, bias=False))
+        body.append(nn.LeakyReLU(0.1, inplace=True))
+        body.append(CasResB(8, channels))
+        body.append(nn.Conv2d(channels, 64 * 1, 1, 1, 0, bias=False))
+        body.append(nn.LeakyReLU(0.1, inplace=True))
+        body.append(nn.Conv2d(64, out_nc, 3, 1, 1, bias=True))
+        self.draft_cube_conv = nn.Sequential(*body)
+
+        # sr_in_nc=in_nc*(1**2 * (n_frames-1) +1)
+
+        # Final conv step
+        # Hopefully remove any residual artifacts from the deinterlacing
+        clean_fea_conv = B.conv_block(in_nc, in_nc*2, kernel_size=3, norm_type=None, act_type=act_type)
+        clean_HR_conv0 = B.conv_block(in_nc*2, in_nc*2, kernel_size=3, norm_type=None, act_type=act_type)
+        clean_HR_conv1 = B.conv_block(in_nc*2, out_nc, kernel_size=3, norm_type=None, act_type=None)
+        self.clean = B.sequential(clean_fea_conv, clean_HR_conv0, clean_HR_conv1)
+
+    def motion_estimation(self, x):
+        b, n_frames, c, h, w = x.size()
+        idx_center = (n_frames - 1) // 2
+
+        flow_L1 = []
+        flow_L2 = []
+        flow_L3 = []
+        input = []
+
+        for idx_frame in range(n_frames):
+            if idx_frame != idx_center:
+                input.append(torch.cat((x[:,idx_frame,:,:,:], x[:,idx_center,:,:,:]), 1))
+        optical_flow_L1, optical_flow_L2, optical_flow_L3 = self.OFR(torch.cat(input, 0))
+
+        optical_flow_L1 = optical_flow_L1.view(-1, b, 2, h//2, w//2)
+        optical_flow_L2 = optical_flow_L2.view(-1, b, 2, h, w)
+        optical_flow_L3 = optical_flow_L3.view(-1, b, 2, h, w)
+
+        # motion compensation
+        draft_cube = []
+        draft_cube.append(x[:, idx_center, :, :, :])
+
+        for idx_frame in range(n_frames):
+            if idx_frame == idx_center:
+                flow_L1.append([])
+                flow_L2.append([])
+                flow_L3.append([])
+            else: # if idx_frame != idx_center:
+                if idx_frame < idx_center:
+                    idx = idx_frame
+                if idx_frame > idx_center:
+                    idx = idx_frame - 1
+
+                flow_L1.append(optical_flow_L1[idx, :, :, :, :])
+                flow_L2.append(optical_flow_L2[idx, :, :, :, :])
+                flow_L3.append(optical_flow_L3[idx, :, :, :, :])
+
+                # Generate the draft_cube by subsampling the SR flow optical_flow_L3
+                # according to the scale
+                for i in range(1):
+                    for j in range(1):
+                        draft = optical_flow_warp(x[:, idx_frame, :, :, :],
+                                                  optical_flow_L3[idx, :, :, i::1, j::1] / 1)
+                        draft_cube.append(draft)
+        draft_cube = torch.cat(draft_cube, 1)
+        # print('draft_cube:', draft_cube.shape) #TODO
+
+        #output = self.clean(draft_cube)
+
+        return flow_L1, flow_L2, flow_L3, draft_cube
+
+        
+    def forward(self, x):
+        # x: N, C, T, H, W
+        b, n_frames, c, h, w = x.size()
+
+        idx_center = (n_frames - 1) // 2
+        even_center_field = torch.zeros(b, n_frames, c, h//2, w).to(x.device)
+        odd_center_field = torch.zeros(b, n_frames, c, h//2, w).to(x.device)
+        for i_frame in range(n_frames):
+            odd_center_field[:, i_frame, :, i_frame%2::2, :]
+            even_center_field[:, i_frame, :, (i_frame+1)%2::2, :]
+
+        ocf_flow_L1, ocf_flow_L2, ocf_flow_L3, ocf_draft_cube = self.motion_estimation(odd_center_field)
+        ecf_flow_L1, ecf_flow_L2, ecf_flow_L3, ecf_draft_cube = self.motion_estimation(even_center_field)
+
+        ocf = self.draft_cube_conv(ocf_draft_cube)
+        ecf = self.draft_cube_conv(ecf_draft_cube)
+
+        ocf_full = replace_field(ocf, x[:, idx_center, :, :, :], upfield=True)
+        ecf_full = replace_field(ecf, x[:, idx_center, :, :, :], upfield=False)
+
+        ocf_output = self.clean(ocf_full)
+        ecf_output = self.clean(ecf_full)
+
+        # return ocf_flow_L1, ocf_flow_L2, ocf_flow_L3, ocf_output
+        
+        return ocf_flow_L1, ocf_flow_L2, ocf_flow_L3, ocf_output, ecf_flow_L1, ecf_flow_L2, ecf_flow_L3, ecf_output
+
+

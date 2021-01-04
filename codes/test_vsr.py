@@ -222,17 +222,17 @@ def main():
                 logger.info(img_name)
 
         #TODO: update to use metrics functions
-        if need_HR:  # metrics
-            # Average PSNR/SSIM results
-            ave_psnr = sum(test_results['psnr']) / len(test_results['psnr'])
-            ave_ssim = sum(test_results['ssim']) / len(test_results['ssim'])
-            logger.info('----Average PSNR/SSIM results for {}----\n\tPSNR: {:.6f} dB; SSIM: {:.6f}\n'\
-                    .format(test_set_name, ave_psnr, ave_ssim))
-            if test_results['psnr_y'] and test_results['ssim_y']:
-                ave_psnr_y = sum(test_results['psnr_y']) / len(test_results['psnr_y'])
-                ave_ssim_y = sum(test_results['ssim_y']) / len(test_results['ssim_y'])
-                logger.info('----Y channel, average PSNR/SSIM----\n\tPSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}\n'\
-                    .format(ave_psnr_y, ave_ssim_y))
+        # if need_HR:  # metrics
+        #     # Average PSNR/SSIM results
+        #     ave_psnr = sum(test_results['psnr']) / len(test_results['psnr'])
+        #     ave_ssim = sum(test_results['ssim']) / len(test_results['ssim'])
+        #     logger.info('----Average PSNR/SSIM results for {}----\n\tPSNR: {:.6f} dB; SSIM: {:.6f}\n'\
+        #             .format(test_set_name, ave_psnr, ave_ssim))
+        #     if test_results['psnr_y'] and test_results['ssim_y']:
+        #         ave_psnr_y = sum(test_results['psnr_y']) / len(test_results['psnr_y'])
+        #         ave_ssim_y = sum(test_results['ssim_y']) / len(test_results['ssim_y'])
+        #         logger.info('----Y channel, average PSNR/SSIM----\n\tPSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}\n'\
+        #             .format(ave_psnr_y, ave_ssim_y))
 
 if __name__ == '__main__':
     main()

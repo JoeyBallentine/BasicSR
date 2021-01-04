@@ -23,6 +23,8 @@ def create_model(opt):
         from .PBR_model import PBRModel as M
     elif model == 'dvd':
         from .DVD_model import DVDModel as M
+    elif model == 'vdof':
+        from .VDOF_model import VDOFModel as M
     else:
         raise NotImplementedError('Model [{:s}] not recognized.'.format(model))
     m = M(opt)

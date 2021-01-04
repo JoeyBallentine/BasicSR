@@ -225,6 +225,10 @@ def define_G(opt, step=0):
     elif which_model == 'VDSPC_net':
         from models.modules.architectures import VDIOF_arch
         netG = VDIOF_arch.VDSPCNet(in_nc=opt_net['in_nc'], out_nc=opt_net['out_nc'], nf=opt_net['nf'], n_frames=opt_net['n_frames'])
+    elif which_model == 'VDOF_net':
+        from models.modules.architectures import VDIOF_arch
+        netG = VDIOF_arch.VDOFNet(in_nc=opt_net['in_nc'], out_nc=opt_net['out_nc'], nf=opt_net['nf'], channels=opt_net['channels'])
+    
     else:
         raise NotImplementedError('Generator model [{:s}] not recognized'.format(which_model))
 

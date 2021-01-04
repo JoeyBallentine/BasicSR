@@ -41,6 +41,8 @@ def create_dataset(dataset_opt):
         from data.DVD_dataset import DVDDataset as D
     elif mode == 'DVDI':
         from data.DVD_dataset import DVDIDataset as D
+    elif mode == 'INTERLACED':
+        from data.interlaced_dataset import InterlacedDataset as D
     else:
         raise NotImplementedError('Dataset [{:s}] is not recognized.'.format(mode))
     dataset = D(dataset_opt)
