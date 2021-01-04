@@ -314,7 +314,7 @@ class VDSPCNet(nn.Module):
 
         return output
 
-class VDOFNet(nn.Module):
+class VDOFNet_old(nn.Module):
     '''
     Video Deinterlacing with Optical Flow Warping (VDIOF)
     '''
@@ -435,3 +435,122 @@ class VDOFNet(nn.Module):
         return ocf_flow_L1, ocf_flow_L2, ocf_flow_L3, ocf_output, ecf_flow_L1, ecf_flow_L2, ecf_flow_L3, ecf_output
 
 
+class VDOFNet(nn.Module):
+    '''
+    Video Deinterlacing with Optical Flow Warping (VDOF)
+    '''
+    def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', channels=320, n_frames=3):
+        super(VDOFNet, self).__init__()
+
+        conv_fea_1 = nn.Sequential(nn.Conv2d(in_nc*n_frames, nf, kernel_size=3, padding=1), nn.ReLU())
+        conv_fea_2 = nn.Sequential(nn.Conv2d(nf, nf, kernel_size=3, padding=1), nn.ReLU())
+        conv_fea_3 = nn.Conv2d(nf, nf//2, kernel_size=1)
+        h = nn.Sequential(conv_fea_1, conv_fea_2, conv_fea_3)
+
+        conv_branch_top = nn.Conv2d(nf//2, nf//2, kernel_size=3, padding=1)
+        conv_branch_bottom = nn.Conv2d(nf//2, nf//2, kernel_size=3, padding=1)
+
+        final_branch_top = nn.Conv2d(nf//2, out_nc*n_frames, kernel_size=3, stride=(2, 1), padding=1)
+        final_branch_bottom = nn.Conv2d(nf//2, out_nc*n_frames, kernel_size=3, stride=(2, 1), padding=1)
+
+        self.model_y = nn.Sequential(h, conv_branch_top, final_branch_top)
+        self.model_z = nn.Sequential(h, conv_branch_bottom, final_branch_bottom)
+
+        # Optical Flow Estimation Step
+        # Use motion estimation to restore center frame
+        self.OFR = OFRnet(channels, 3)
+
+        sr_in_nc=in_nc*((n_frames-1) +1)
+
+        body = []
+        body.append(nn.Conv2d(sr_in_nc, channels, 3, 1, 1, bias=False))
+        body.append(nn.LeakyReLU(0.1, inplace=True))
+        body.append(CasResB(8, channels))
+        body.append(nn.Conv2d(channels, 64 * 1, 1, 1, 0, bias=False))
+        body.append(nn.LeakyReLU(0.1, inplace=True))
+        body.append(nn.Conv2d(64, out_nc, 3, 1, 1, bias=True))
+        self.draft_cube_conv = nn.Sequential(*body)
+
+        # sr_in_nc=in_nc*(1**2 * (n_frames-1) +1)
+
+        # Final conv step
+        # Hopefully remove any residual artifacts from the deinterlacing
+        # clean_fea_conv = B.conv_block(in_nc, in_nc*2, kernel_size=3, norm_type=None, act_type=act_type)
+        # clean_HR_conv0 = B.conv_block(in_nc*2, in_nc*2, kernel_size=3, norm_type=None, act_type=act_type)
+        # clean_HR_conv1 = B.conv_block(in_nc*2, out_nc, kernel_size=3, norm_type=None, act_type=None)
+        # self.clean = B.sequential(clean_fea_conv, clean_HR_conv0, clean_HR_conv1)
+
+    def motion_estimation(self, x):
+        b, n_frames, c, h, w = x.size()
+        idx_center = (n_frames - 1) // 2
+
+        flow_L1 = []
+        flow_L2 = []
+        flow_L3 = []
+        input = []
+
+        for idx_frame in range(n_frames):
+            if idx_frame != idx_center:
+                input.append(torch.cat((x[:,idx_frame,:,:,:], x[:,idx_center,:,:,:]), 1))
+        optical_flow_L1, optical_flow_L2, optical_flow_L3 = self.OFR(torch.cat(input, 0))
+
+        optical_flow_L1 = optical_flow_L1.view(-1, b, 2, h//2, w//2)
+        optical_flow_L2 = optical_flow_L2.view(-1, b, 2, h, w)
+        optical_flow_L3 = optical_flow_L3.view(-1, b, 2, h, w)
+
+        # motion compensation
+        draft_cube = []
+        draft_cube.append(x[:, idx_center, :, :, :])
+
+        for idx_frame in range(n_frames):
+            if idx_frame == idx_center:
+                flow_L1.append([])
+                flow_L2.append([])
+                flow_L3.append([])
+            else: # if idx_frame != idx_center:
+                if idx_frame < idx_center:
+                    idx = idx_frame
+                if idx_frame > idx_center:
+                    idx = idx_frame - 1
+
+                flow_L1.append(optical_flow_L1[idx, :, :, :, :])
+                flow_L2.append(optical_flow_L2[idx, :, :, :, :])
+                flow_L3.append(optical_flow_L3[idx, :, :, :, :])
+
+                # Generate the draft_cube by subsampling the SR flow optical_flow_L3
+                # according to the scale
+                for i in range(1):
+                    for j in range(1):
+                        draft = optical_flow_warp(x[:, idx_frame, :, :, :],
+                                                  optical_flow_L3[idx, :, :, i::1, j::1] / 1)
+                        draft_cube.append(draft)
+        draft_cube = torch.cat(draft_cube, 1)
+        # print('draft_cube:', draft_cube.shape) #TODO
+
+        #output = self.clean(draft_cube)
+
+        return flow_L1, flow_L2, flow_L3, draft_cube
+
+        
+    def forward(self, x):
+        # x: N, C, T, H, W
+        b, n_frames, c, h, w = x.size()
+
+        x = x.view(b,c*n_frames,h,w) # N, CT, H, W
+
+        # Combines the interlaced data of each frame into a full frame
+        y = self.model_y(x)
+        z = self.model_z(x)
+        x[:, :, 0::2, :] = y
+        x[:, :, 1::2, :] = z
+
+        x = x.view(b,c,n_frames,h,w) # N, C, T, H, W
+
+        # Optical Flow Motion Estimation
+        flow_L1, flow_L2, flow_L3, draft_cube = self.motion_estimation(x)
+
+        # Convert draft cube into single image
+        out = self.draft_cube_conv(draft_cube)
+
+        return flow_L1, flow_L2, flow_L3, out
+        

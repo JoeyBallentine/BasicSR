@@ -146,7 +146,7 @@ class InterlacedDataset(data.Dataset):
         HR_EVEN = HR_EVEN.transpose(0,1) # Tensor, [T,C,H,W]
         LR = LR.transpose(0,1) # Tensor, [T,C,H,W]
             
-        return {'LR': LR, 'HR_ODD': HR_ODD, 'HR_EVEN': HR_EVEN}
+        return {'LR': LR, 'HR_ODD': HR_ODD, 'HR_EVEN': HR_EVEN, 'HR': HR_ODD, 'HR_center': HR_ODD[idx_center, :, :, :], 'LR_bicubic': []}
 
     def __len__(self):
         return len(self.paths_prog)

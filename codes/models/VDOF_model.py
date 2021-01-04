@@ -239,8 +239,8 @@ class VDOFModel(BaseModel):
         with self.cast():
             # inference
             self.ocf_flow_L1, self.ocf_flow_L2, self.ocf_flow_L3, self.ocf_output, self.ecf_flow_L1, self.ecf_flow_L2, self.ecf_flow_L3, self.ecf_output = self.netG(self.var_L)
-            # tmp_vis(self.ocf_output)
-            # tmp_vis(self.ecf_output)
+            tmp_vis(self.ocf_output)
+            tmp_vis(self.ecf_output)
             # if not isinstance(self.fake_H, torch.Tensor) and len(self.fake_H) == 4:
             #     flow_L1, flow_L2, flow_L3, self.fake_H = self.fake_H
         #/with self.cast():

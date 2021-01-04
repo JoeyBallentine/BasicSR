@@ -266,6 +266,7 @@ class VSRModel(BaseModel):
             self.fake_H = self.netG(self.var_L)
             if not isinstance(self.fake_H, torch.Tensor) and len(self.fake_H) == 4:
                 flow_L1, flow_L2, flow_L3, self.fake_H = self.fake_H
+                # tmp_vis(self.fake_H)
         #/with self.cast():
 
         # batch (mixup) augmentations
@@ -328,11 +329,11 @@ class VSRModel(BaseModel):
                     l_g_ofr = 0
                     for i in range(self.n_frames):
                         if i != self.idx_center:
-                            loss_L1 = self.cri_ofr(F.avg_pool2d(self.var_L[:, i, :, 0::2, :], kernel_size=2),
-                                            F.avg_pool2d(self.var_L[:, self.idx_center, :, 0::2, :], kernel_size=2),
+                            loss_L1 = self.cri_ofr(F.avg_pool2d(self.var_L[:, i, :, :, :], kernel_size=2),
+                                            F.avg_pool2d(self.var_L[:, self.idx_center, :, :, :], kernel_size=2),
                                             flow_L1[i])
-                            loss_L2 = self.cri_ofr(self.var_L[:, i, :, 0::2, :], self.var_L[:, self.idx_center, :, 0::2, :], flow_L2[i])
-                            loss_L3 = self.cri_ofr(self.var_H[:, i, :, 0::2, :], self.var_H[:, self.idx_center, :, 0::2, :], flow_L3[i])
+                            loss_L2 = self.cri_ofr(self.var_L[:, i, :, :, :], self.var_L[:, self.idx_center, :, :, :], flow_L2[i])
+                            loss_L3 = self.cri_ofr(self.var_H[:, i, :, :, :], self.var_H[:, self.idx_center, :, :, :], flow_L3[i])
                             # ofr weights option. lambda2 = 0.2, lambda1 = 0.1 in the paper
                             l_g_ofr += loss_L3 + self.ofr_wl2 * loss_L2 + self.ofr_wl1 * loss_L1
 
