@@ -141,6 +141,10 @@ class InterlacedDataset(data.Dataset):
         HR_ODD = HR_ODD.view(c,t,patch_size,patch_size) # Tensor, [C,T,H,W]
         HR_EVEN = HR_EVEN.view(c,t,patch_size,patch_size) # Tensor, [C,T,H,W]
         LR = LR.view(c,t,patch_size,patch_size) # Tensor, [C,T,H,W]
+
+        HR_ODD = HR_ODD.transpose(0,1) # Tensor, [T,C,H,W]
+        HR_EVEN = HR_EVEN.transpose(0,1) # Tensor, [T,C,H,W]
+        LR = LR.transpose(0,1) # Tensor, [T,C,H,W]
             
         return {'LR': LR, 'HR_ODD': HR_ODD, 'HR_EVEN': HR_EVEN}
 
@@ -208,7 +212,7 @@ class InterlacedTestDataset(data.Dataset):
         if self.shape == 'TCHW':
             LR = LR.transpose(0,1) # Tensor, [T,C,H,W]
 
-        return {'in': img_in, 'in_path': in_path}
+        return {'LR': LR, 'lr_path': in_path}
 
     def __len__(self):
         return len(self.paths_in)
