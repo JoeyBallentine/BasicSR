@@ -148,13 +148,15 @@ class InterlacedDataset(data.Dataset):
         return len(self.paths_prog)
 
 
-class DVDIDataset(data.Dataset):
+class InterlacedTestDataset(data.Dataset):
     '''Read interlaced images only in the test phase.'''
 
     def __init__(self, opt):
-        super(DVDIDataset, self).__init__()
+        super(InterlacedTestDataset, self).__init__()
         self.opt = opt
         self.paths_in = None
+
+        self.num_frames = opt['num_frames']
 
         # read image list from lmdb or image files
         _, self.paths_in = util.get_image_paths('img', opt['dataroot_in'])
@@ -163,13 +165,48 @@ class DVDIDataset(data.Dataset):
     def __getitem__(self, index):
         in_path = None
 
-        # get LR image
-        in_path = self.paths_in[index]
-        #img_LR = util.read_img(self.LR_env, LR_path)
-        img_in = util.read_img(None, in_path)
+        # # get LR image
+        # in_path = self.paths_in[index]
+        # #img_LR = util.read_img(self.LR_env, LR_path)
+        # img_in = util.read_img(None, in_path)
 
-        # BGR to RGB, HWC to CHW, numpy to tensor
-        img_in = util.np2tensor(img_in, add_batch=False)
+        # # BGR to RGB, HWC to CHW, numpy to tensor
+        # img_in = util.np2tensor(img_in, add_batch=False)
+
+        paths_in = self.paths_in
+
+        for i_frame in range(self.num_frames):
+            if index == len(self.paths_in)-2 and self.num_frames == 3:
+                # print("second to last frame:", i_frame)
+                if i_frame == 0:
+                    LR_img = util.read_img(None, paths_in[int(index)], out_nc=self.image_channels)
+                else:
+                    LR_img = util.read_img(None, paths_in[int(index)+1], out_nc=self.image_channels)
+            elif index == len(self.paths_in)-1 and self.num_frames == 3:
+                # print("last frame:", i_frame)
+                LR_img = util.read_img(None, paths_in[int(index)], out_nc=self.image_channels)
+            # every other internal frame
+            else:
+                # print("normal frame:", idx_frame)
+                LR_img = util.read_img(None, paths_in[int(index)+(i_frame)], out_nc=self.image_channels)
+            #TODO: check if this is necessary
+            LR_img = util.modcrop(LR_img, scale)
+    
+
+            LR_list.append(LR_img) # h, w, c
+            
+            if not self.y_only and (not h_LR or not w_LR):
+                h_LR, w_LR, c = LR_img.shape
+
+        t = self.num_frames
+        LR = [np.asarray(LT) for LT in LR_list]  # list -> numpy # input: list (contatin numpy: [H,W,C])
+        LR = np.asarray(LR) # numpy, [T,H,W,C]
+        LR = LR.transpose(1,2,3,0).reshape(h_LR, w_LR, -1) # numpy, [Hl',Wl',CT]
+
+        LR = util.np2tensor(LR, normalize=znorm, bgr2rgb=True, add_batch=False) # Tensor, [CT',H',W'] or [T, H, W]
+        LR = LR.view(c,t,h_LR,w_LR) # Tensor, [C,T,H,W]
+        if self.shape == 'TCHW':
+            LR = LR.transpose(0,1) # Tensor, [T,C,H,W]
 
         return {'in': img_in, 'in_path': in_path}
 

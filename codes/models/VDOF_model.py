@@ -277,6 +277,13 @@ class VDOFModel(BaseModel):
                 central_sr_even = self.ecf_output
                 central_hr_odd= self.var_H_odd[:, self.idx_center, :, :, :]
                 central_hr_even= self.var_H_even[:, self.idx_center, :, :, :]
+
+                lb, lt, lc, lh, lw = self.var_L.shape
+                odd_center_field = torch.zeros(lb, lt, lc, lh//2, lw).to(self.var_L.device)
+                even_center_field = torch.zeros_like(odd_center_field).to(self.var_L.device)
+                for i in range(self.n_frames):
+                    odd_center_field[:, i, :, :, :] = self.var_L[:, i, :, i%2::2, :]
+                    even_center_field[:, i, :, :, :] = self.var_L[:, i, :, (i+1)%2::2, :]
                 
                 # tmp_vis(torch.cat((centralSR, centralHR), -1))
 
@@ -297,13 +304,11 @@ class VDOFModel(BaseModel):
                     l_g_ofr = 0
                     for i in range(self.n_frames):
                         if i != self.idx_center:
-                            # Here we want it to look at the optical flow of the 'even' rows (1-indexed)
-                            # This is so it can properly estimate how to get the 'even' rows to morph into the 'odd' center
-                            loss_L1 = self.cri_ofr(F.avg_pool2d(self.var_L[:, i, :, 1::2, :], kernel_size=2),
-                                            F.avg_pool2d(self.var_L[:, self.idx_center, :, 1::2, :], kernel_size=2),
+                            loss_L1 = self.cri_ofr(F.avg_pool2d(odd_center_field[:, i, :, :, :], kernel_size=2),
+                                            F.avg_pool2d(odd_center_field[:, self.idx_center, :, :, :], kernel_size=2),
                                             self.ocf_flow_L1[i])
-                            loss_L2 = self.cri_ofr(self.var_L[:, i, :, 1::2, :], self.var_L[:, self.idx_center, :, 1::2, :], self.ocf_flow_L2[i])
-                            loss_L3 = self.cri_ofr(self.var_H_odd[:, i, :, 1::2, :], self.var_H_odd[:, self.idx_center, :, 1::2, :], self.ocf_flow_L3[i])
+                            loss_L2 = self.cri_ofr(odd_center_field[:, i, :, :, :], odd_center_field[:, self.idx_center, :, :, :], self.ocf_flow_L2[i])
+                            loss_L3 = self.cri_ofr(self.var_H_odd[:, i, :, 0::2, :], self.var_H_odd[:, self.idx_center, :, 0::2, :], self.ocf_flow_L3[i])
                             # ofr weights option. lambda2 = 0.2, lambda1 = 0.1 in the paper
                             l_g_ofr += loss_L3 + self.ofr_wl2 * loss_L2 + self.ofr_wl1 * loss_L1
 
@@ -315,13 +320,11 @@ class VDOFModel(BaseModel):
                     l_g_ofr = 0
                     for i in range(self.n_frames):
                         if i != self.idx_center:
-                            # Here we want it to look at the optical flow of the 'odd' rows (1-indexed)
-                            # This is so it can properly estimate how to get the 'odd' rows to morph into the 'even' center
-                            loss_L1 = self.cri_ofr(F.avg_pool2d(self.var_L[:, i, :, 0::2, :], kernel_size=2),
-                                            F.avg_pool2d(self.var_L[:, self.idx_center, :, 0::2, :], kernel_size=2),
+                            loss_L1 = self.cri_ofr(F.avg_pool2d(even_center_field[:, i, :, :, :], kernel_size=2),
+                                            F.avg_pool2d(even_center_field[:, self.idx_center, :, :, :], kernel_size=2),
                                             self.ecf_flow_L1[i])
-                            loss_L2 = self.cri_ofr(self.var_L[:, i, :, 0::2, :], self.var_L[:, self.idx_center, :, 0::2, :], self.ecf_flow_L2[i])
-                            loss_L3 = self.cri_ofr(self.var_H_even[:, i, :, 0::2, :], self.var_H_even[:, self.idx_center, :, 0::2, :], self.ecf_flow_L3[i])
+                            loss_L2 = self.cri_ofr(even_center_field[:, i, :, :, :], even_center_field[:, self.idx_center, :, :, :], self.ecf_flow_L2[i])
+                            loss_L3 = self.cri_ofr(self.var_H_even[:, i, :, 1::2, :], self.var_H_even[:, self.idx_center, :, 1::2, :], self.ecf_flow_L3[i])
                             # ofr weights option. lambda2 = 0.2, lambda1 = 0.1 in the paper
                             l_g_ofr += loss_L3 + self.ofr_wl2 * loss_L2 + self.ofr_wl1 * loss_L1
 
@@ -424,13 +427,11 @@ class VDOFModel(BaseModel):
         with torch.no_grad():
             if self.is_train:
                 self.fake_H = self.netG(self.var_L)
-                if len(self.fake_H) == 4:
-                    _, _, _, self.fake_H = self.fake_H
+                _, _, _, self.fake_H_odd, _, _, _, self.fake_H_even = self.fake_H
             else:
                 #self.fake_H = self.netG(self.var_L, isTest=True)
                 self.fake_H = self.netG(self.var_L)
-                if len(self.fake_H) == 4:
-                    _, _, _, self.fake_H = self.fake_H
+                _, _, _, self.fake_H_odd, _, _, _, self.fake_H_even = self.fake_H
         self.netG.train()
 
     def get_current_log(self):
