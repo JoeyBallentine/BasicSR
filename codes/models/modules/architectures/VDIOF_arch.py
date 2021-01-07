@@ -93,11 +93,18 @@ class VDOFNet(nn.Module):
     def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', channels=320, n_frames=3):
         super(VDOFNet, self).__init__()
 
+        # upsample block
+        # upsample = []
+        # upsample.append(B.conv_block(6, 64, 3, act_type=act_type))
+        # upsample.append(B.upconv_block(64, 64, (1, 2, 1)))
+        # upsample.append(B.conv_block(64, 6, 3, act_type=None))
+        # self.upsample = B.sequential(*upsample)
+
         # Optical Flow Estimation Step
         # Use motion estimation to restore center frame
-        self.OFR = OFRnet(channels, 3)
+        self.OFR = OFRnet(channels, 6)
 
-        sr_in_nc=in_nc*((n_frames-1) +1)
+        sr_in_nc=2*in_nc*((n_frames-1) +1)
 
         body = []
         body.append(nn.Conv2d(sr_in_nc, channels, 3, 1, 1, bias=False))
@@ -159,13 +166,25 @@ class VDOFNet(nn.Module):
 
         
     def forward(self, x):
-        # x: N, C, T, H, W
+        # B, T, C, H, W
         b, n_frames, c, h, w = x.size()
+
+        # Split tensor into fields
+        odd = x[:, :, :, 0::2, :]
+        even = x[:, :, :, 1::2, :]
+        # Concat fields on channel dimension
+        x = torch.cat((odd, even), 2) # B, T, C*2, H//2, W
+        # Concat 3 frames on channel dimension
+        x = torch.cat([x[:, t, :, :, :] for t in range(n_frames)], 1) # B, C*2*T, H//2, W
+        # Resize to full heigh 
+        x = F.interpolate(x, size=(h, w), mode='nearest') # B, C*2*T, H, W
+        # View back to 3 concatenated fields
+        x = x.view(b, n_frames, c*2, h, w) # B, T, C*2, H, W
 
         # Optical Flow Motion Estimation
         flow_L1, flow_L2, flow_L3, draft_cube = self.motion_estimation(x)
 
-        # Convert draft cube into two images
+        # Convert draft cube into 6 channel image (2 concatenated frames)
         out = self.draft_cube_conv(draft_cube)
 
         return flow_L1, flow_L2, flow_L3, out

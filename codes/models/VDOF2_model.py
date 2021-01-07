@@ -195,17 +195,23 @@ class VDOF2Model(BaseModel):
 
     def feed_data(self, data, need_HR=True):
         # data
-        _, n_frames, _, _, _ = data['LR'].size() # b, t, c, h, w
+        b, n_frames, c, h, w = data['LR'].size() # b, t, c, h, w
         LR = data['LR']
 
         self.idx_center = (n_frames - 1) // 2
         self.n_frames = n_frames
 
         self.var_L = LR.to(self.device)
+        odd = self.var_L[:, :, :, 0::2, :]
+        even = self.var_L[:, :, :, 1::2, :]
+        self.var_L_stacked = torch.cat((odd, even), 2)
+        concatenated = torch.cat([self.var_L_stacked[:, t, :, :, :] for t in range(n_frames)], 1)
+        full_height = F.interpolate(concatenated, size=(h, w), mode='nearest')
+        self.var_L_stretched = full_height.view(b, n_frames, c*2, h, w).to(self.device)
 
         self.var_H_odd = data['HR_ODD'].to(self.device)
         self.var_H_even = data['HR_EVEN'].to(self.device)
-        self.var_H_stacked = torch.stack((self.var_H_odd, self.var_H_even), 2)
+        self.var_H_stacked = torch.cat((self.var_H_odd, self.var_H_even), 2)
 
         if need_HR:  # train or val
             # discriminator references
@@ -301,13 +307,13 @@ class VDOF2Model(BaseModel):
                     l_g_ofr = 0
                     for i in range(self.n_frames):
                         if i != self.idx_center:
-                            loss_L1 = self.cri_ofr(F.avg_pool2d(self.var_L[:, i, :, :, :], kernel_size=2),
-                                            F.avg_pool2d(self.var_L[:, self.idx_center, :, :, :], kernel_size=2),
+                            loss_L1 = self.cri_ofr(F.avg_pool2d(self.var_L_stretched[:, i, :, :, :], kernel_size=2),
+                                            F.avg_pool2d(self.var_L_stretched[:, self.idx_center, :, :, :], kernel_size=2),
                                             flow_L1[i])
-                            loss_L2 = self.cri_ofr(self.var_L[:, i, :, :, :], self.var_L[:, self.idx_center, :, :, :], flow_L2[i])
-                            loss_L3_o = self.cri_ofr(self.var_H_odd[:, i, :, :, :], self.var_H_odd[:, self.idx_center, :, :, :], flow_L3[i])
-                            loss_L3_e = self.cri_ofr(self.var_H_even[:, i, :, :, :], self.var_H_even[:, self.idx_center, :, :, :], flow_L3[i])
-                            loss_L3 = (loss_L3_o + loss_L3_e) / 2
+                            loss_L2 = self.cri_ofr(self.var_L_stretched[:, i, :, :, :], self.var_L_stretched[:, self.idx_center, :, :, :], flow_L2[i])
+                            loss_L3 = self.cri_ofr(self.var_H_stacked[:, i, :, :, :], self.var_H_stacked[:, self.idx_center, :, :, :], flow_L3[i])
+                            # loss_L3_e = self.cri_ofr(self.var_H_even[:, i, :, :, :], self.var_H_even[:, self.idx_center, :, :, :], flow_L3[i])
+                            # loss_L3 = (loss_L3_o + loss_L3_e) / 2
                             # ofr weights option. lambda2 = 0.2, lambda1 = 0.1 in the paper
                             l_g_ofr += loss_L3 + self.ofr_wl2 * loss_L2 + self.ofr_wl1 * loss_L1
 
