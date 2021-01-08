@@ -262,8 +262,8 @@ class VDOF2Model(BaseModel):
                 _, _, h, w = self.fake_H_stacked.shape
                 self.fake_H_odd = self.fake_H_stacked[:, :, :h//2, :]
                 self.fake_H_even = self.fake_H_stacked[:, :, h//2:, :]
-                tmp_vis(self.fake_H_odd)
-                tmp_vis(self.fake_H_even)
+                # tmp_vis(self.fake_H_odd)
+                # tmp_vis(self.fake_H_even)
         #/with self.cast():
 
         # batch (mixup) augmentations
@@ -274,15 +274,15 @@ class VDOF2Model(BaseModel):
         '''
 
         #TODO: TMP test to view samples of the optical flows
-        tmp_vis(self.var_H_odd[:, self.idx_center, :, :, :], True)
-        tmp_vis(self.var_H_even[:, self.idx_center, :, :, :], True)
-        #print(flow_L1[0].shape)
-        tmp_vis(flow_L1[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        tmp_vis(flow_L2[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        tmp_vis(flow_L3[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        tmp_vis_flow(flow_L1[0])
-        tmp_vis_flow(flow_L2[0])
-        tmp_vis_flow(flow_L3[0])
+        # tmp_vis(self.var_H_odd[:, self.idx_center, :, :, :], True)
+        # tmp_vis(self.var_H_even[:, self.idx_center, :, :, :], True)
+        # #print(flow_L1[0].shape)
+        # tmp_vis(flow_L1[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+        # tmp_vis(flow_L2[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+        # tmp_vis(flow_L3[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+        # tmp_vis_flow(flow_L1[0])
+        # tmp_vis_flow(flow_L2[0])
+        # tmp_vis_flow(flow_L3[0])
         
         l_g_total = 0
         """
