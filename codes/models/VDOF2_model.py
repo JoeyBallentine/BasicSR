@@ -343,16 +343,16 @@ class VDOF2Model(BaseModel):
                 if self.cri_gan:
                     # adversarial loss
                     l_g_gan = self.adversarial(
-                        centralSR_odd, centralHR_odd, netD=self.netD, 
+                        centralSR, centralHR, netD=self.netD, 
                         stage='generator', fsfilter = self.f_high) # (sr, hr)
                     self.log_dict['l_g_gan_odd'] = l_g_gan.item()
                     l_g_total += l_g_gan/self.accumulations
 
-                    l_g_gan = self.adversarial(
-                        centralSR_even, centralHR_even, netD=self.netD, 
-                        stage='generator', fsfilter = self.f_high) # (sr, hr)
-                    self.log_dict['l_g_gan_even'] = l_g_gan.item()
-                    l_g_total += l_g_gan/self.accumulations
+                    # l_g_gan = self.adversarial(
+                    #     centralSR_even, centralHR_even, netD=self.netD, 
+                    #     stage='generator', fsfilter = self.f_high) # (sr, hr)
+                    # self.log_dict['l_g_gan_even'] = l_g_gan.item()
+                    # l_g_total += l_g_gan/self.accumulations
 
             #/with self.cast():
             
@@ -400,12 +400,12 @@ class VDOF2Model(BaseModel):
             
             with self.cast(): # Casts operations to mixed precision if enabled, else nullcontext
                 l_d_total, gan_logs = self.adversarial(
-                    centralSR_odd, centralHR_odd, netD=self.netD, 
+                    centralSR, centralHR, netD=self.netD, 
                     stage='discriminator', fsfilter = self.f_high) # (sr, hr)
 
-                l_d_total, gan_logs = self.adversarial(
-                    centralSR_even, centralHR_even, netD=self.netD, 
-                    stage='discriminator', fsfilter = self.f_high) # (sr, hr)
+                # l_d_total, gan_logs = self.adversarial(
+                #     centralSR_even, centralHR_even, netD=self.netD, 
+                #     stage='discriminator', fsfilter = self.f_high) # (sr, hr)
 
                 for g_log in gan_logs:
                     self.log_dict[g_log] = gan_logs[g_log]
