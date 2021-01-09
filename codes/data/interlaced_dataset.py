@@ -98,6 +98,12 @@ class InterlacedDataset(data.Dataset):
         # img_bot = util.read_img(None, bot_path, out_nc=image_channels)
 
         interlaced_list = []
+
+        if self.opt.get('frame_duping', None):
+            if random.random() < 0.25:
+                idx = random.randint(0, (self.num_frames * 2) - 1)
+                img_list[idx+1] = img_list[idx]
+
         odds = img_list[0::2]
         evens = img_list[1::2]
         for i in range(self.num_frames):
