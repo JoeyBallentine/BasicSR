@@ -101,8 +101,9 @@ class InterlacedDataset(data.Dataset):
 
         if self.opt.get('frame_duping', None):
             if random.random() < 0.25:
-                idx = random.randint(0, (self.num_frames * 2) - 2)
-                img_list[idx+1] = img_list[idx]
+                idx = random.randint(1, (self.num_frames * 2) - 1)
+                print(idx, len(img_list))
+                img_list[idx-1] = img_list[idx]
 
         odds = img_list[0::2]
         evens = img_list[1::2]
