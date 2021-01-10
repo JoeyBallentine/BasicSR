@@ -1,10 +1,10 @@
-name: debug_VDOF-att2 # use "debug" or "debug_nochkp" in the name to run a test session and check everything is working. Does validation and state saving every 8 iterations.
+name: debug_VDOF-heghtof-att1 # use "debug" or "debug_nochkp" in the name to run a test session and check everything is working. Does validation and state saving every 8 iterations.
 #name: 001_template # remove "debug" to run the real training session.
 use_tb_logger: true
 model: vdof
 scale: 1
 gpu_ids: [0]
-use_amp: true
+use_amp: false
 
 # Dataset options:
 datasets:
@@ -23,8 +23,8 @@ datasets:
     HR_size: 128 # patch size. Default: 128. Needs to be coordinated with the patch size of the features network
     image_channels: 3 # number of channels to load images in
     num_frames: 3 # number of frames to use to train the network (default: 3). Must coincide with "n_frames" in the network.
-    random_reverse: true # augmentation to randomly revert the frame orders
-    max_frameskip: 3 # if training data FPS is higher than inference data, introduce random frameskip between 1 and max_frameskip
+    random_reverse: false # augmentation to randomly revert the frame orders
+    max_frameskip: 1 # if training data FPS is higher than inference data, introduce random frameskip between 1 and max_frameskip
     srcolors: true # enable to be able to use losses that need 3 channels (feature losses, CX, etc), otherwise training only with Y channel
     y_only: false #true
     # tensor_shape: CTHW # TCHW (SOFVSR, VDIOF), CTHW (3DSR, EVSRGAN)
@@ -34,7 +34,7 @@ datasets:
     lr_downscale: false # false
     lr_downscale_types: ["linear", "cubic", "matlab_bicubic"] # select from ["nearest", "linear", "cubic", "area", "lanczos4", "linear_exact", "matlab_bicubic", "realistic"] #scale_algos #scaling interpolation options
 
-    # frame_duping: true # on-the-fly frame duping to simulate animation or pulldown
+    frame_duping: true # on-the-fly frame duping to simulate animation or pulldown
     #lr_field_alternation: true # on-the-fly frame squashing into alternative (top and bottom) fields for deinterlacing
     # lr_field_voidweave: true # on-the-fly voidweaving
     
@@ -53,8 +53,8 @@ datasets:
 path:
     strict: false # true | false 
     root: 'C:/Code/GitHub/BasicSR'
-    # pretrain_model_G: '../experiments/pretrained_models/video_x4.pth'
-    #resume_state: '../experiments/debug_002_video_x4_REDS/training_state/16.state'
+    # pretrain_model_G: 'C:/users/joeyj/Downloads/35000_G.pth'
+    #resume_state: 'C:/Code/GitHub/BasicSR/experiments/debug_VDOF-stackedof-att1/training_state/latest.state'
 
 # Generator options:
 network_G:
@@ -180,8 +180,8 @@ train:
     # Losses:
     pixel_criterion: l1 # "l1" | "l2" | "cb" | "elastic" | "relativel1" | "l1cosinesim" | "clipl1" #pixel loss
     pixel_weight: 1 # 1
-    feature_criterion: l1 # "l1" | "l2" | "cb" | "elastic" #feature loss (VGG feature network)
-    feature_weight: 5e-4
+    # feature_criterion: l1 # "l1" | "l2" | "cb" | "elastic" #feature loss (VGG feature network)
+    # feature_weight: 1
     # cx_weight: 2e-5
     # cx_type: contextual
     # cx_vgg_layers: {conv_3_2: 1, conv_4_2: 1}
@@ -194,9 +194,9 @@ train:
     tv_norm: 1 # 1 for l1 (default) or 2 for l2.
     # ssim_type: ssim # "ssim" | "ms-ssim" #helps to maintain luminance, contrast and covariance between SR and HR
     # ssim_weight: 1
-    lpips_weight: 1e-2 # perceptual loss
-    lpips_type: net-lin # net-lin | net *
-    lpips_net: squeeze # "vgg" | "alex" | "squeeze" 
+    # lpips_weight: 1e-2 # perceptual loss
+    # lpips_type: net-lin # net-lin | net *
+    # lpips_net: squeeze # "vgg" | "alex" | "squeeze" 
     
     # Experimental losses
     # spl_type: spl # "spl" | "gpl" | "cpl"
@@ -247,6 +247,6 @@ train:
     metrics: 'psnr,ssim,lpips' # select from: "psnr,ssim,lpips" or a combination separated by comma ","
 
 logger:
-    print_freq: 200
-    save_checkpoint_freq: 5e3
+    print_freq: 50
+    save_checkpoint_freq: 1e3
     overwrite_chkp: false
