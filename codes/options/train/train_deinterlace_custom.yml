@@ -1,4 +1,4 @@
-name: debug_VDOF-heghtof-att1 # use "debug" or "debug_nochkp" in the name to run a test session and check everything is working. Does validation and state saving every 8 iterations.
+name: debug_SOFVDI-att1 # use "debug" or "debug_nochkp" in the name to run a test session and check everything is working. Does validation and state saving every 8 iterations.
 #name: 001_template # remove "debug" to run the real training session.
 use_tb_logger: true
 model: vdof
@@ -11,7 +11,7 @@ datasets:
   train: 
     name: REDS
     mode: INTERLACED
-    dataroot_progressive: 'C:\Users\joeyj\Documents\datasets\val_sharp\val\val_sharp' # high resolution / ground truth images
+    dataroot_progressive: 'D:\Datasets\REDS\train_sharp' # high resolution / ground truth images
     # dataroot_LR: '../datasets/train/lr' # low resolution images. If there are missing LR images, they will be generated on the fly from HR
     
     subset_file: null
@@ -34,7 +34,7 @@ datasets:
     lr_downscale: false # false
     lr_downscale_types: ["linear", "cubic", "matlab_bicubic"] # select from ["nearest", "linear", "cubic", "area", "lanczos4", "linear_exact", "matlab_bicubic", "realistic"] #scale_algos #scaling interpolation options
 
-    frame_duping: true # on-the-fly frame duping to simulate animation or pulldown
+    # frame_duping: true # on-the-fly frame duping to simulate animation or pulldown
     #lr_field_alternation: true # on-the-fly frame squashing into alternative (top and bottom) fields for deinterlacing
     # lr_field_voidweave: true # on-the-fly voidweaving
     
@@ -52,7 +52,7 @@ datasets:
 
 path:
     strict: false # true | false 
-    root: 'C:/Code/GitHub/BasicSR'
+    root: 'E:/Code/GitHub/BasicSR'
     # pretrain_model_G: 'C:/users/joeyj/Downloads/35000_G.pth'
     #resume_state: 'C:/Code/GitHub/BasicSR/experiments/debug_VDOF-stackedof-att1/training_state/latest.state'
 
