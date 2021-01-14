@@ -188,7 +188,6 @@ class VDOFNet(nn.Module):
 
         # Convert draft cube into 2 stacked images
         draft = self.draft_cube_conv(draft_cube)[:, :, :, 0::2]
-        print(draft.shape)
         # odd_draft = draft[:, :, :h, 0::2]
         # even_draft = draft[:, :, h:, 0::2]
         # print(odd_draft.shape)

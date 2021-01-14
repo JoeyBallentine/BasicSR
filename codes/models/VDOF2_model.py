@@ -221,7 +221,6 @@ class VDOF2Model(BaseModel):
         self.var_H_even = data['HR_EVEN'].to(self.device)
         self.var_H_stacked = torch.cat((self.var_H_odd, self.var_H_even), 3)
         self.var_H_stretched = F.interpolate(self.var_H_stacked, (n_frames, h*2, w*2))
-        print(f'vfstr-{self.var_H_stretched.shape}')
 
         # if need_HR:  # train or val
         #     # discriminator references
