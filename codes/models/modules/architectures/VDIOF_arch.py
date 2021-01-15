@@ -57,11 +57,10 @@ class OFRnet(nn.Module):
 
         SR = []
         SR.append(nn.Conv2d(channels, 64 * 4, 1, 1, 0, bias=False))
-        SR.append(nn.PixelShuffle(2)) #TODO
-        SR.append(nn.LeakyReLU(0.1, inplace=True))
-
-        # Switch from pixelshuffle to upconv block here to allow tuple upscale factor
-         #SR.append(B.upconv_block(channels, 64, upscale_factor=(2, 1), kernel_size=3, stride=1, act_type='leakyrelu'))
+        # SR.append(nn.PixelShuffle(2)) #TODO
+        # SR.append(nn.LeakyReLU(0.1, inplace=True))
+        # Switch from pixelshuffle to upconv block here
+        SR.append(B.upconv_block(channels, 64, upscale_factor=2, kernel_size=3, stride=1, act_type='leakyrelu'))
         SR.append(nn.Conv2d(64, 2*img_ch, 3, 1, 1, bias=False))
         self.SR = nn.Sequential(*SR)
 
@@ -109,10 +108,10 @@ class VDOFNet(nn.Module):
         body.append(nn.Conv2d(sr_in_nc, channels, 3, 1, 1, bias=False))
         body.append(nn.LeakyReLU(0.1, inplace=True))
         body.append(CasResB(8, channels))
-        body.append(nn.Conv2d(channels, 64 * 4, 1, 1, 0, bias=False))
-        body.append(nn.PixelShuffle(2)) #TODO
-        body.append(nn.LeakyReLU(0.1, inplace=True))
-        # body.append(B.upconv_block(channels, 64, upscale_factor=(2, 1), kernel_size=3, stride=1, act_type='leakyrelu'))
+        # body.append(nn.Conv2d(channels, 64 * 4, 1, 1, 0, bias=False))
+        # body.append(nn.PixelShuffle(2)) #TODO
+        # body.append(nn.LeakyReLU(0.1, inplace=True))
+        body.append(B.upconv_block(channels, 64, upscale_factor=2, kernel_size=3, stride=1, act_type='leakyrelu'))
         body.append(nn.Conv2d(64, out_nc, 3, 1, 1, bias=True))
         self.draft_cube_conv = nn.Sequential(*body)
 
