@@ -267,7 +267,7 @@ class VDOF2Model(BaseModel):
                 # self.fake_H_even = self.fake_H_stacked[:, :, h//2:, :]
                 # tmp_vis(self.fake_H_odd)
                 # tmp_vis(self.fake_H_even)
-                tmp_vis(self.fake_H)
+                # tmp_vis(self.fake_H)
         #/with self.cast():
 
         # batch (mixup) augmentations
@@ -280,15 +280,15 @@ class VDOF2Model(BaseModel):
         #TODO: TMP test to view samples of the optical flows
         # tmp_vis(self.var_H_odd[:, self.idx_center, :, :, :], True)
         # tmp_vis(self.var_H_even[:, self.idx_center, :, :, :], True)
-        tmp_vis(self.var_L[:, self.idx_center, :, :, :], True)
-        tmp_vis(self.var_H[:, self.idx_center, :, :, :], True)
-        #print(flow_L1[0].shape)
-        tmp_vis(flow_L1[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        tmp_vis(flow_L2[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        tmp_vis(flow_L3[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        tmp_vis_flow(flow_L1[0])
-        tmp_vis_flow(flow_L2[0])
-        tmp_vis_flow(flow_L3[0])
+        # tmp_vis(self.var_L[:, self.idx_center, :, :, :], True)
+        # tmp_vis(self.var_H[:, self.idx_center, :, :, :], True)
+        # #print(flow_L1[0].shape)
+        # tmp_vis(flow_L1[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+        # tmp_vis(flow_L2[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+        # tmp_vis(flow_L3[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+        # tmp_vis_flow(flow_L1[0])
+        # tmp_vis_flow(flow_L2[0])
+        # tmp_vis_flow(flow_L3[0])
         
         l_g_total = 0
         """
@@ -335,9 +335,6 @@ class VDOF2Model(BaseModel):
                                             F.avg_pool2d(self.var_L[:, self.idx_center, :, :, :], kernel_size=2),
                                             flow_L1[i])
                             loss_L2 = self.cri_ofr(self.var_L[:, i, :, :, :], self.var_L[:, self.idx_center, :, :, :], flow_L2[i])
-                            print('yeehaw')
-                            print(self.var_H_stretched.shape)
-                            print(flow_L3[i].shape)
                             loss_L3 = self.cri_ofr(self.var_H_stretched[:, i, :, :, :], self.var_H_stretched[:, self.idx_center, :, :, :], flow_L3[i])
                             # loss_L3_e = self.cri_ofr(self.var_H_even[:, i, :, :, :], self.var_H_even[:, self.idx_center, :, :, :], flow_L3[i])
                             # loss_L3 = (loss_L3_o + loss_L3_e) / 2
