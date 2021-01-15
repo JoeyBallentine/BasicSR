@@ -172,10 +172,10 @@ class VDOFNet(nn.Module):
         center_idx = (n_frames - 1) // 2
 
         # Split tensor into fields
-        odd = x[:, :, :, 0::2, :]
-        even = x[:, :, :, 1::2, :]
+        # odd = x[:, :, :, 0::2, :]
+        # even = x[:, :, :, 1::2, :]
         # Concat fields on height dimension
-        x = torch.cat((odd, even), 3) # B, T, C, H, W
+        # x = torch.cat((odd, even), 3) # B, T, C, H, W
         # Concat 3 frames on channel dimension
         # x = torch.cat([x[:, t, :, :, :] for t in range(n_frames)], 1) # B, C*T, H, W
         # Resize to double height 
