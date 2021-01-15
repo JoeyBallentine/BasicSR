@@ -51,6 +51,9 @@ class InterlacedDataset(data.Dataset):
         img_list = []
 
         if self.opt.get('combed', None):
+            if index+self.num_frames*2 > len(self.paths_prog):
+                index = index - self.num_frames*2
+
             interlaced_list = []
             for i_frame in range(self.num_frames * 2):
                 img = util.read_img(None, self.paths_prog[int(index)+(i_frame)], out_nc=image_channels)
@@ -61,8 +64,6 @@ class InterlacedDataset(data.Dataset):
                     idx = random.randint(1, (self.num_frames * 2) - 1)
                     img_list[idx-1] = img_list[idx]
 
-            if index+self.num_frames*2 > len(self.paths_prog):
-                index = index - self.num_frames*2
             
             odds = img_list[0::2]
             evens = img_list[1::2]
@@ -103,9 +104,17 @@ class InterlacedDataset(data.Dataset):
                 HR_EVEN = HR_EVEN.transpose(0,1) # Tensor, [T,C,H,W]
                 LR = LR.transpose(0,1) # Tensor, [T,C,H,W]
         else:
+            if index + self.num_frames > len(self.paths_prog):
+                index = index - self.num_frames
+
             for i_frame in range(self.num_frames):
                 img = util.read_img(None, self.paths_prog[int(index)+(i_frame)], out_nc=image_channels)
                 img_list.append(img)
+
+            if self.opt.get('frame_duping', None):
+                if random.random() < 0.25:
+                    idx = random.randint(1, (self.num_frames * 2) - 1)
+                    img_list[idx-1] = img_list[idx]
 
             HR = [np.asarray(GT) for GT in img_list]
             HR = np.asarray(HR)
