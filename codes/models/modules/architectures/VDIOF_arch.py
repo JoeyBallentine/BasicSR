@@ -56,7 +56,7 @@ class OFRnet(nn.Module):
         )
 
         SR = []
-        SR.append(nn.Conv2d(channels, 64 * 4, 1, 1, 0, bias=False))
+        # SR.append(nn.Conv2d(channels, 64 * 4, 1, 1, 0, bias=False))
         # SR.append(nn.PixelShuffle(2)) #TODO
         # SR.append(nn.LeakyReLU(0.1, inplace=True))
         # Switch from pixelshuffle to upconv block here
