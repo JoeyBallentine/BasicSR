@@ -125,24 +125,29 @@ class InterlacedDataset(data.Dataset):
             if random.random() < 0.5:
                 offset = 1
             for i in range(self.num_frames):
+                h, w, c = img_list[i].shape
                 if (i+offset)%2 == 0:
-                    img_list[i] = img_list[i][0::2, :, :]
+                    # Grab only the "odd" field and stretch it back to full height
+                    img_list[i] = cv2.resize(img_list[i][0::2, :, :], (w, h), interpolation=cv2.INTER_NEAREST)
                 else:
-                    img_list[i] = img_list[i][1::2, :, :]
+                    # Grab only the "even" field and stretch it back to full height
+                    img_list[i] = cv2.resize(img_list[i][1::2, :, :], (w, h), interpolation=cv2.INTER_NEAREST)
+                    # Shift stretched field down by one pixel to align it
+                    img_list[i][1:, ...] = img_list[i][:-1, ...]
 
             LR = [np.asarray(LT) for LT in img_list]  # list -> numpy # input: list (contatin numpy: [H,W,C])
             LR = np.asarray(LR) # numpy, [T,H,W,C]
-            LR = LR.transpose(1,2,3,0).reshape(h_HR//2, w_HR, -1) # numpy, [Hl',Wl',CT]
+            LR = LR.transpose(1,2,3,0).reshape(h_HR, w_HR, -1) # numpy, [Hl',Wl',CT]
 
-            HR, _, hr_crop_params, _ = vd.random_crop_mod(HR, None, patch_size, 1)
-            h_start_hr, h_end_hr, w_start_hr, w_end_hr = hr_crop_params
-            LR, _, _, _ = vd.random_crop_mod(LR, None, patch_size, 1, (h_start_hr//2, h_end_hr//2, w_start_hr, w_end_hr))
+            HR, LR, hr_crop_params, _ = vd.random_crop_mod(HR, LR, patch_size, 1)
+            # h_start_hr, h_end_hr, w_start_hr, w_end_hr = hr_crop_params
+            # LR, _, _, _ = vd.random_crop_mod(LR, None, patch_size, 1, (h_start_hr//2, h_end_hr//2, w_start_hr, w_end_hr))
 
             HR = util.np2tensor(HR, bgr2rgb=True, add_batch=False) # Tensor, [CT',H',W'] or [T, H, W]
             LR = util.np2tensor(LR, bgr2rgb=True, add_batch=False) # Tensor, [CT',H',W'] or [T, H, W]
 
             HR = HR.view(c,self.num_frames,patch_size,patch_size) # Tensor, [C,T,H,W]
-            LR = LR.view(c,self.num_frames,patch_size//2,patch_size) # Tensor, [C,T,H,W]
+            LR = LR.view(c,self.num_frames,patch_size,patch_size) # Tensor, [C,T,H,W]
 
             HR = HR.transpose(0,1) # Tensor, [T,C,H,W]
             LR = LR.transpose(0,1) # Tensor, [T,C,H,W]

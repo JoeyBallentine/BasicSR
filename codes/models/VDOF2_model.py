@@ -211,7 +211,7 @@ class VDOF2Model(BaseModel):
 
         self.var_L = data['LR'].to(self.device)
         self.var_H = data['HR'].to(self.device)
-        self.var_H_stretched = F.interpolate(self.var_H, (n_frames, h*2, w*2))
+        # self.var_H_stretched = F.interpolate(self.var_H, (n_frames, h*2, w*2))
         # odd = self.var_L[:, :, :, 0::2, :]
         # even = self.var_L[:, :, :, 1::2, :]
         # self.var_L_stacked = torch.cat((odd, even), 3)
@@ -335,7 +335,7 @@ class VDOF2Model(BaseModel):
                                             F.avg_pool2d(self.var_L[:, self.idx_center, :, :, :], kernel_size=2),
                                             flow_L1[i])
                             loss_L2 = self.cri_ofr(self.var_L[:, i, :, :, :], self.var_L[:, self.idx_center, :, :, :], flow_L2[i])
-                            loss_L3 = self.cri_ofr(self.var_H_stretched[:, i, :, :, :], self.var_H_stretched[:, self.idx_center, :, :, :], flow_L3[i])
+                            loss_L3 = self.cri_ofr(self.var_H[:, i, :, :, :], self.var_H[:, self.idx_center, :, :, :], flow_L3[i])
                             # loss_L3_e = self.cri_ofr(self.var_H_even[:, i, :, :, :], self.var_H_even[:, self.idx_center, :, :, :], flow_L3[i])
                             # loss_L3 = (loss_L3_o + loss_L3_e) / 2
                             # ofr weights option. lambda2 = 0.2, lambda1 = 0.1 in the paper
@@ -351,7 +351,7 @@ class VDOF2Model(BaseModel):
                     l_g_gan = self.adversarial(
                         centralSR, centralHR, netD=self.netD, 
                         stage='generator', fsfilter = self.f_high) # (sr, hr)
-                    self.log_dict['l_g_gan_odd'] = l_g_gan.item()
+                    self.log_dict['l_g_gan'] = l_g_gan.item()
                     l_g_total += l_g_gan/self.accumulations
 
                     # l_g_gan = self.adversarial(
