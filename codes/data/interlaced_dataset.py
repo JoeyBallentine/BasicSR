@@ -115,6 +115,10 @@ class InterlacedDataset(data.Dataset):
                 if random.random() < 0.25:
                     idx = random.randint(1, (self.num_frames) - 1)
                     img_list[idx-1] = img_list[idx]
+                if random.random() < 0.025:  
+                    frame = img_list[0]
+                    for i in range(len(img_list)):
+                        img_list[i] = frame
 
             HR = [np.asarray(GT) for GT in img_list]
             HR = np.asarray(HR)
