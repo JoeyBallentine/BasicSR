@@ -41,9 +41,10 @@ class CasResB(nn.Module):
         return self.body(x)
 
 class OFRnet(nn.Module):
-    def __init__(self, channels, img_ch=3):
+    def __init__(self, channels, img_ch=3, scale=1, nf=64):
         super(OFRnet, self).__init__()
         self.pool = nn.AvgPool2d(2)
+        self.scale = scale
 
         ## RNN part
         self.RNN1 = nn.Sequential(
@@ -55,13 +56,12 @@ class OFRnet(nn.Module):
             nn.Conv2d(channels, 2*img_ch, 3, 1, 1, bias=False),
         )
 
-        SR = []
-        # SR.append(nn.Conv2d(channels, 64 * 4, 1, 1, 0, bias=False))
-        # SR.append(nn.PixelShuffle(2)) #TODO
-        # SR.append(nn.LeakyReLU(0.1, inplace=True))
-        # Switch from pixelshuffle to upconv block here
-        SR.append(B.upconv_block(channels, 64, upscale_factor=1, kernel_size=3, stride=1, act_type='leakyrelu'))
-        SR.append(nn.Conv2d(64, 2*img_ch, 3, 1, 1, bias=False))
+        SR = [
+            R.ResidualDenseBlock_5C(channels, kernel_size=3),
+            B.upconv_block(channels, nf, upscale_factor=scale, kernel_size=3, stride=1, act_type='leakyrelu'),
+            R.ResidualDenseBlock_5C(nf, kernel_size=3),
+            nn.Conv2d(nf, 2*img_ch, 3, 1, 1, bias=False),
+        ]
         self.SR = nn.Sequential(*SR)
 
     def __call__(self, x):
@@ -74,7 +74,7 @@ class OFRnet(nn.Module):
         optical_flow_L1 = self.RNN2(one)
 
         image_shape = torch.unsqueeze(x[:, 0, :, :], 1).shape
-        optical_flow_L1_upscaled = F.interpolate(optical_flow_L1, size=(image_shape[2],image_shape[3]), mode='bilinear', align_corners=False) * 1
+        optical_flow_L1_upscaled = F.interpolate(optical_flow_L1, size=(image_shape[2],image_shape[3]), mode='bilinear', align_corners=False) * 2
 
         #Part 2
         x_L2 = optical_flow_warp(torch.unsqueeze(x[:, 0, :, :], 1), optical_flow_L1_upscaled)
@@ -93,27 +93,30 @@ class OFRnet(nn.Module):
 class VDOFNet(nn.Module):
     '''
     Video Deinterlacing with Optical Flow Warping (VDOF)
-    SOF-VDI
+    RS-OF-VDI (Residual Optical Flow Video De-Interlacing)
     '''
-    def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', channels=320, n_frames=3):
+    def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', channels=320, n_frames=3, scale=1):
         super(VDOFNet, self).__init__()
+
+        self.scale = scale
 
         # Optical Flow Estimation Step
         # Use motion estimation to restore center frame
-        self.OFR = OFRnet(channels, 3)
+        self.OFR = OFRnet(channels, 3, scale=scale)
 
-        sr_in_nc=in_nc*((1**2) * (n_frames-1) +1)
+        sr_in_nc=in_nc*((scale**2) * (n_frames-1) +1)
 
-        body = []
-        body.append(nn.Conv2d(sr_in_nc, channels, 3, 1, 1, bias=False))
-        body.append(nn.LeakyReLU(0.1, inplace=True))
-        body.append(CasResB(8, channels))
-        # body.append(nn.Conv2d(channels, 64 * 4, 1, 1, 0, bias=False))
-        # body.append(nn.PixelShuffle(2)) #TODO
-        # body.append(nn.LeakyReLU(0.1, inplace=True))
-        body.append(B.upconv_block(channels, 64, upscale_factor=1, kernel_size=3, stride=1, act_type='leakyrelu'))
-        body.append(nn.Conv2d(64, out_nc, 3, 1, 1, bias=True))
-        self.draft_cube_conv = nn.Sequential(*body)
+        SR = [
+            nn.Conv2d(sr_in_nc, channels, 3, 1, 1, bias=False),
+            nn.LeakyReLU(0.1, inplace=True),
+            CasResB(8, channels), 
+            R.ResidualDenseBlock_5C(channels, kernel_size=3),
+            B.upconv_block(channels, nf, upscale_factor=scale, kernel_size=3, stride=1, act_type=act_type),
+            R.ResidualDenseBlock_5C(nf, kernel_size=3),
+            B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=act_type),
+            nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True),
+        ]
+        self.draft_cube_conv = nn.Sequential(*SR)
 
     def motion_estimation(self, x):
         b, n_frames, c, h, w = x.size()
@@ -131,7 +134,7 @@ class VDOFNet(nn.Module):
 
         optical_flow_L1 = optical_flow_L1.view(-1, b, 2, h//2, w//2)
         optical_flow_L2 = optical_flow_L2.view(-1, b, 2, h, w)
-        optical_flow_L3 = optical_flow_L3.view(-1, b, 2, h*1, w*1)
+        optical_flow_L3 = optical_flow_L3.view(-1, b, 2, h*self.scale, w*self.scale)
 
         # motion compensation
         draft_cube = []
@@ -154,10 +157,10 @@ class VDOFNet(nn.Module):
 
                 # Generate the draft_cube by subsampling the SR flow optical_flow_L3
                 # according to the scale
-                for i in range(1):
-                    for j in range(1):
+                for i in range(self.scale):
+                    for j in range(self.scale):
                         draft = optical_flow_warp(x[:, idx_frame, :, :, :],
-                                                  optical_flow_L3[idx, :, :, i::1, j::1] / 1)
+                                                  optical_flow_L3[idx, :, :, i::self.scale, j::self.scale] / self.scale)
                         draft_cube.append(draft)
         draft_cube = torch.cat(draft_cube, 1)
         # print('draft_cube:', draft_cube.shape) #TODO
@@ -167,40 +170,14 @@ class VDOFNet(nn.Module):
         
     def forward(self, x):
         # B, T, C, H, W
-        b, n_frames, c, h, w = x.size()
+        _, n_frames, _, _, _ = x.size()
         center_idx = (n_frames - 1) // 2
-
-        # Split tensor into fields
-        # odd = x[:, :, :, 0::2, :]
-        # even = x[:, :, :, 1::2, :]
-        # Concat fields on height dimension
-        # x = torch.cat((odd, even), 3) # B, T, C, H, W
-        # Concat 3 frames on channel dimension
-        # x = torch.cat([x[:, t, :, :, :] for t in range(n_frames)], 1) # B, C*T, H, W
-        # Resize to double height 
-        # x = F.interpolate(x, size=(h*2, w), mode='nearest') # B, C*T, H*2, W
-        # View back to 3 concatenated fields
-        # x = x.view(b, n_frames, c, h*2, w) # B, T, C, H*2, W
 
         # Optical Flow Motion Estimation
         flow_L1, flow_L2, flow_L3, draft_cube = self.motion_estimation(x)
 
-        # Convert draft cube into 2 stacked images
-        draft = self.draft_cube_conv(draft_cube) # [:, :, :, 0::2]
-        # odd_draft = draft[:, :, :h, 0::2]
-        # even_draft = draft[:, :, h:, 0::2]
-        # print(odd_draft.shape)
-
-        # out_odd = torch.zeros(b, c, h*2, w)
-        # out_even = torch.zeros(b, c, h*2, w)
-        # print(odd[:, center_idx, :, :, :].shape)
-
-        # out_odd[:, :, 0::2, :] = odd[:, center_idx, :, :, :]
-        # out_odd[:, :, 1::2, :] = odd_draft
-        # out_even[:, :, 0::2, :] = even_draft
-        # out_even[:, :, 1::2, :] = even[:, center_idx, :, :, :]
-
-        # out = torch.cat((out_odd, out_even), 2).to(x.device)
+        # Convert draft cube into image
+        draft = self.draft_cube_conv(draft_cube)
 
         return flow_L1, flow_L2, flow_L3, draft
         
