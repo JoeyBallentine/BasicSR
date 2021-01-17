@@ -196,40 +196,14 @@ class VDOF2Model(BaseModel):
     def feed_data(self, data, need_HR=True):
         # data
         b, n_frames, c, h, w = data['LR'].size() # b, t, c, h, w
-        # LR = data['LR']
 
         self.idx_center = (n_frames - 1) // 2
         self.n_frames = n_frames
 
-        # self.var_L = LR.to(self.device)
-        # odd = self.var_L[:, :, :, 0::2, :]
-        # even = self.var_L[:, :, :, 1::2, :]
-        # self.var_L_stacked = torch.cat((odd, even), 2)
-        # concatenated = torch.cat([self.var_L_stacked[:, t, :, :, :] for t in range(n_frames)], 1)
-        # full_height = F.interpolate(concatenated, size=(h, w), mode='nearest')
-        # self.var_L_stretched = full_height.view(b, n_frames, c*2, h, w).to(self.device)
-
         self.var_L = data['LR'].to(self.device)
         self.var_H = data['HR'].to(self.device)
-        # self.var_H_stretched = F.interpolate(self.var_H, (n_frames, h*2, w*2))
-        # odd = self.var_L[:, :, :, 0::2, :]
-        # even = self.var_L[:, :, :, 1::2, :]
-        # self.var_L_stacked = torch.cat((odd, even), 3)
-        # concatenated = torch.cat([self.var_L_stacked[:, t, :, :, :] for t in range(n_frames)], 1)
-        # full_height = F.interpolate(concatenated, size=(h*2, w), mode='nearest')
-        # self.var_L_stretched = full_height.view(b, n_frames, c, h*2, w).to(self.device)
-
-        # self.var_H_odd = data['HR_ODD'].to(self.device)
-        # self.var_H_even = data['HR_EVEN'].to(self.device)
-        # self.var_H_stacked = torch.cat((self.var_H_odd, self.var_H_even), 3)
-        # self.var_H_stretched = F.interpolate(self.var_H_stacked, (n_frames, h*2, w*2))
-
-        # if need_HR:  # train or val
-        #     # discriminator references
-        #     input_ref_odd = data.get('ref', data['HR_ODD'])
-        #     input_ref_even = data.get('ref', data['HR_EVEN']) 
-        #     self.var_ref_odd = input_ref_odd.to(self.device)
-        #     self.var_ref_even = input_ref_even.to(self.device)
+        self.var_H_squashed = F.interpolate(self.var_H, size=(n_frames, h//2, w), mode='area').to(self.device)
+        self.var_H_stretched = F.interpolate(self.var_H, size=(n_frames, h, w*2), mode='nearest').to(self.device)
 
     def feed_data_batch(self, data, need_HR=True):
         #TODO
@@ -253,6 +227,8 @@ class VDOF2Model(BaseModel):
                 self.aux_mixprob, self.aux_mixalpha, self.mix_p
                 )
         '''
+
+        debug = False
         
         ### Network forward, generate SR
         with self.cast():
@@ -260,14 +236,8 @@ class VDOF2Model(BaseModel):
             self.fake_H = self.netG(self.var_L)
             if not isinstance(self.fake_H, torch.Tensor) and len(self.fake_H) == 4:
                 flow_L1, flow_L2, flow_L3, self.fake_H = self.fake_H
-                # self.fake_H_odd = self.fake_H_stacked[:, :3, :, :]
-                # self.fake_H_even = self.fake_H_stacked[:, 3:, :, :]
-                # _, _, h, w = self.fake_H_stacked.shape
-                # self.fake_H_odd = self.fake_H_stacked[:, :, :h//2, :]
-                # self.fake_H_even = self.fake_H_stacked[:, :, h//2:, :]
-                # tmp_vis(self.fake_H_odd)
-                # tmp_vis(self.fake_H_even)
-                # tmp_vis(self.fake_H)
+                if debug:
+                    tmp_vis(self.fake_H)
         #/with self.cast():
 
         # batch (mixup) augmentations
@@ -278,17 +248,15 @@ class VDOF2Model(BaseModel):
         '''
 
         #TODO: TMP test to view samples of the optical flows
-        # tmp_vis(self.var_H_odd[:, self.idx_center, :, :, :], True)
-        # tmp_vis(self.var_H_even[:, self.idx_center, :, :, :], True)
-        # tmp_vis(self.var_L[:, self.idx_center, :, :, :], True)
-        # tmp_vis(self.var_H[:, self.idx_center, :, :, :], True)
-        # #print(flow_L1[0].shape)
-        # tmp_vis(flow_L1[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        # tmp_vis(flow_L2[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        # tmp_vis(flow_L3[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        # tmp_vis_flow(flow_L1[0])
-        # tmp_vis_flow(flow_L2[0])
-        # tmp_vis_flow(flow_L3[0])
+        if debug:
+            tmp_vis(self.var_L[:, self.idx_center, :, :, :], True)
+            tmp_vis(self.var_H[:, self.idx_center, :, :, :], True)
+            tmp_vis(flow_L1[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+            tmp_vis(flow_L2[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+            tmp_vis(flow_L3[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+            tmp_vis_flow(flow_L1[0])
+            tmp_vis_flow(flow_L2[0])
+            tmp_vis_flow(flow_L3[0])
         
         l_g_total = 0
         """
@@ -331,11 +299,11 @@ class VDOF2Model(BaseModel):
                     l_g_ofr = 0
                     for i in range(self.n_frames):
                         if i != self.idx_center:
-                            loss_L1 = self.cri_ofr(F.avg_pool2d(self.var_L[:, i, :, :, :], kernel_size=2),
-                                            F.avg_pool2d(self.var_L[:, self.idx_center, :, :, :], kernel_size=2),
+                            loss_L1 = self.cri_ofr(F.avg_pool2d(self.var_H_squashed[:, i, :, :, :], kernel_size=2),
+                                            F.avg_pool2d(self.var_H_squashed[:, self.idx_center, :, :, :], kernel_size=2),
                                             flow_L1[i])
-                            loss_L2 = self.cri_ofr(self.var_L[:, i, :, :, :], self.var_L[:, self.idx_center, :, :, :], flow_L2[i])
-                            loss_L3 = self.cri_ofr(self.var_H[:, i, :, :, :], self.var_H[:, self.idx_center, :, :, :], flow_L3[i])
+                            loss_L2 = self.cri_ofr(self.var_H_squashed[:, i, :, :, :], self.var_H_squashed[:, self.idx_center, :, :, :], flow_L2[i])
+                            loss_L3 = self.cri_ofr(self.var_H_stretched[:, i, :, :, :], self.var_H_stretched[:, self.idx_center, :, :, :], flow_L3[i])
                             # loss_L3_e = self.cri_ofr(self.var_H_even[:, i, :, :, :], self.var_H_even[:, self.idx_center, :, :, :], flow_L3[i])
                             # loss_L3 = (loss_L3_o + loss_L3_e) / 2
                             # ofr weights option. lambda2 = 0.2, lambda1 = 0.1 in the paper

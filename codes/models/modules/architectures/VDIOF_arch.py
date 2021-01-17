@@ -57,9 +57,9 @@ class OFRnet(nn.Module):
         )
 
         SR = [
-            R.ResidualDenseBlock_5C(channels, kernel_size=3),
+            # R.ResidualDenseBlock_5C(channels, kernel_size=3),
             B.upconv_block(channels, nf, upscale_factor=scale, kernel_size=3, stride=1, act_type='leakyrelu'),
-            R.ResidualDenseBlock_5C(nf, kernel_size=3),
+            # R.ResidualDenseBlock_5C(nf, kernel_size=3),
             nn.Conv2d(nf, 2*img_ch, 3, 1, 1, bias=False),
         ]
         self.SR = nn.Sequential(*SR)
@@ -85,7 +85,7 @@ class OFRnet(nn.Module):
         x_L3 = optical_flow_warp(torch.unsqueeze(x[:, 0, :, :], 1), optical_flow_L2)
         input_L3 = torch.cat((x_L3, torch.unsqueeze(x[:, 1, :, :], 1), optical_flow_L2), 1)
 
-        optical_flow_L3 = self.SR(self.RNN1(input_L3)) + F.interpolate(optical_flow_L2, scale_factor=1, mode='bilinear', align_corners=False) * 1
+        optical_flow_L3 = self.SR(self.RNN1(input_L3)) + F.interpolate(optical_flow_L2, scale_factor=self.scale, mode='bilinear', align_corners=False) * self.scale
         return optical_flow_L1, optical_flow_L2, optical_flow_L3
 
         
@@ -95,26 +95,36 @@ class VDOFNet(nn.Module):
     Video Deinterlacing with Optical Flow Warping (VDOF)
     RS-OF-VDI (Residual Optical Flow Video De-Interlacing)
     '''
-    def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', channels=320, n_frames=3, scale=1):
+    def __init__(self, in_nc=3, out_nc=3, nf=64, act_type='leakyrelu', channels=320, n_frames=3):
         super(VDOFNet, self).__init__()
 
-        self.scale = scale
+        self.scale = 2
+
+        # Bring resized and aligned fields back to half height
+        squash = [
+            nn.Conv2d(in_nc*n_frames, nf, 3, 1, 1, bias=True),
+            # R.ResidualDenseBlock_5C(nf, kernel_size=3),
+            nn.Conv2d(nf, nf, 3, (2, 1), 1, bias=True),
+            nn.Conv2d(nf, in_nc*n_frames, 3, 1, 1, bias=True),
+        ]
+        self.squash = nn.Sequential(*squash)
 
         # Optical Flow Estimation Step
         # Use motion estimation to restore center frame
-        self.OFR = OFRnet(channels, 3, scale=scale)
+        self.OFR = OFRnet(channels, 3, scale=self.scale, nf=nf)
 
-        sr_in_nc=in_nc*((scale**2) * (n_frames-1) +1)
+        # Calculate number of channels for SR input
+        sr_in_nc=in_nc*((self.scale**2) * (n_frames-1) +1)
 
         SR = [
             nn.Conv2d(sr_in_nc, channels, 3, 1, 1, bias=False),
             nn.LeakyReLU(0.1, inplace=True),
             CasResB(8, channels), 
-            R.ResidualDenseBlock_5C(channels, kernel_size=3),
-            B.upconv_block(channels, nf, upscale_factor=scale, kernel_size=3, stride=1, act_type=act_type),
-            R.ResidualDenseBlock_5C(nf, kernel_size=3),
+            # R.ResidualDenseBlock_5C(channels, kernel_size=3),
+            B.upconv_block(channels, nf, upscale_factor=self.scale, kernel_size=3, stride=1, act_type=act_type),
+            # R.ResidualDenseBlock_5C(nf, kernel_size=3),
             B.conv_block(nf, nf, kernel_size=3, norm_type=None, act_type=act_type),
-            nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True),
+            nn.Conv2d(nf, out_nc, 3, (1, 2), 1, bias=True), # half-width output
         ]
         self.draft_cube_conv = nn.Sequential(*SR)
 
@@ -170,8 +180,15 @@ class VDOFNet(nn.Module):
         
     def forward(self, x):
         # B, T, C, H, W
-        _, n_frames, _, _, _ = x.size()
+        b, n_frames, c, h, w = x.size()
         center_idx = (n_frames - 1) // 2
+
+        # Cat frames into channel dimension
+        x = x.view(b, n_frames*c, h, w) # B, CT, H, W 
+        # Squash into half-height fields using strided convolution
+        x = self.squash(x)
+        # Expand back into frame dimension
+        x = x.view(b, n_frames, c, h//2, w) # B, C, T, H//2, W 
 
         # Optical Flow Motion Estimation
         flow_L1, flow_L2, flow_L3, draft_cube = self.motion_estimation(x)
