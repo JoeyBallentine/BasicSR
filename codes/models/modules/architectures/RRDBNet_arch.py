@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 #import torchvision
 from . import block as B
 import functools
@@ -16,6 +17,7 @@ class RRDBNet(nn.Module):
             act_type='leakyrelu', mode='CNA', upsample_mode='upconv', convtype='Conv2D', \
             finalact=None, gaussian_noise=False, plus=False):
         super(RRDBNet, self).__init__()
+        self.scale = upscale
         n_upscale = int(math.log(upscale, 2))
         if upscale == 3:
             n_upscale = 1
@@ -46,18 +48,20 @@ class RRDBNet(nn.Module):
             *upsampler, HR_conv0, HR_conv1, outact)
 
     def forward(self, x, outm=None):
-        x = self.model(x)
+        out = self.model(x)
+        base = F.interpolate(x, scale_factor=self.scale, mode='bilinear', align_corners=False)
+        out += base
         
         if outm=='scaltanh': # limit output range to [-1,1] range with tanh and rescale to [0,1] Idea from: https://github.com/goldhuang/SRGAN-PyTorch/blob/master/model.py
-            return(torch.tanh(x) + 1.0) / 2.0
+            return(torch.tanh(out) + 1.0) / 2.0
         elif outm=='tanh': # limit output to [-1,1] range
-            return torch.tanh(x)
+            return torch.tanh(out)
         elif outm=='sigmoid': # limit output to [0,1] range
-            return torch.sigmoid(x)
+            return torch.sigmoid(out)
         elif outm=='clamp':
-            return torch.clamp(x, min=0.0, max=1.0)
+            return torch.clamp(out, min=0.0, max=1.0)
         else: #Default, no cap for the output
-            return x
+            return out
 
 class RRDB(nn.Module):
     '''
