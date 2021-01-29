@@ -55,6 +55,8 @@ def create_dataset(dataset_opt: dict) -> torch.utils.data.Dataset:
         from data.DVD_dataset import DVDDataset as D
     elif mode == 'DVDI':
         from data.DVD_dataset import DVDIDataset as D
+    elif mode == 'INTERLACED':
+        from data.interlaced_dataset import InterlacedDataset as D
     elif mode == 'aligned':
         from data.aligned_dataset import AlignedDataset as D
     elif mode == 'unaligned':

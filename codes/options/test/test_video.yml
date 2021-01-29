@@ -69,6 +69,21 @@ network_G:
   # plus: false # true | false
   # ##finalact: tanh # Test. Activation function to make outputs fit in [-1, 1] range. Default = None. Coordinate with znorm.
 
+  # VDIOF:
+  # which_model_G: VDIOF_net
+  # nf: 64
+  # in_nc: 3
+  # out_nc: 3
+  # channels: 320
+  # n_frames: 3
+
+  # VDSPC:
+  # which_model_G: VDSPC_net
+  # nf: 64
+  # in_nc: 3
+  # out_nc: 3
+  # n_frames: 3
+
   # EDVR:
   # which_model_G: EDVR_net
   # in_nc: 3 # Number of input image channels: 3 for RGB and 1 for grayscale

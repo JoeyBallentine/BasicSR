@@ -220,6 +220,16 @@ def define_G(opt, step=0):
     elif which_model == 'DVD_net':
         from models.modules.architectures import DVDNet_arch
         netG = DVDNet_arch.DVDNet(in_nc=opt_net['in_nc'], out_nc=opt_net['out_nc'], nf=opt_net['nf'])
+    elif which_model == 'VDIOF_net':
+        from models.modules.architectures import VDIOF_arch
+        netG = VDIOF_arch.VDIOFNet(in_nc=opt_net['in_nc'], out_nc=opt_net['out_nc'], nf=opt_net['nf'], channels=opt_net['channels'], n_frames=opt_net['n_frames'])
+    elif which_model == 'VDSPC_net':
+        from models.modules.architectures import VDIOF_arch
+        netG = VDIOF_arch.VDSPCNet(in_nc=opt_net['in_nc'], out_nc=opt_net['out_nc'], nf=opt_net['nf'], n_frames=opt_net['n_frames'])
+    elif which_model == 'VDOF_net':
+        from models.modules.architectures import VDIOF_arch
+        netG = VDIOF_arch.VDOFNet(in_nc=opt_net['in_nc'], out_nc=opt_net['out_nc'], nf=opt_net['nf'], channels=opt_net['channels'])
+    
     elif which_model == 'EDVR_net':
         from models.modules.architectures import EDVR_arch
         netG = EDVR_arch.EDVR(num_in_ch=opt_net['in_nc'], num_out_ch=opt_net['out_nc'], num_feat=opt_net['nf'], num_frame=opt_net['n_frames'],

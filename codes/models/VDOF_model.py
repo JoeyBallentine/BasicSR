@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 
 import models.networks as networks
-from .base_model import BaseModel, nullcast
+from .base_model import BaseModel
 
 logger = logging.getLogger('base')
 
@@ -32,10 +32,20 @@ if load_amp:
 else:
     logger.info('AMP library not available')
 
+class nullcast():
+    #nullcontext:
+    #https://github.com/python/cpython/commit/0784a2e5b174d2dbf7b144d480559e650c5cf64c
+    def __init__(self):
+        pass
+    def __enter__(self):
+        pass
+    def __exit__(self, *excinfo):
+        pass
 
-class VSRModel(BaseModel):
+
+class VDOFModel(BaseModel):
     def __init__(self, opt):
-        super(VSRModel, self).__init__(opt)
+        super(VDOFModel, self).__init__(opt)
         train_opt = opt['train']
         self.scale = opt.get('scale', 4)
         self.tensor_shape = opt.get('tensor_shape', 'TCHW')
@@ -44,16 +54,11 @@ class VSRModel(BaseModel):
         if self.is_train:
             z_norm = opt['datasets']['train'].get('znorm', False)
         
-        # specify the models you want to load/save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>
-        # for training and testing, a generator 'G' is needed 
-        self.model_names = ['G']
-        
         # define networks and load pretrained models
         self.netG = networks.define_G(opt).to(self.device)  # G
         if self.is_train:
             self.netG.train()
             if train_opt['gan_weight']:
-                self.model_names.append('D') # add discriminator to the network list
                 self.netD = networks.define_D(opt).to(self.device)  # D
                 self.netD.train()
         self.load()  # load G and D if needed
@@ -186,51 +191,26 @@ class VSRModel(BaseModel):
         Network summary? Make optional with parameter
             could be an selector between traditional print_network() and summary()
         """
-        self.print_network(verbose=False) #TODO: pass verbose flag from config file
+        #self.print_network() #TODO
 
     def feed_data(self, data, need_HR=True):
-        # data
-        if len(data['LR'].size()) == 4:
-            b, n_frames, h_lr, w_lr = data['LR'].size()
-            LR = data['LR'].view(b, -1, 1, h_lr, w_lr) # b, t, c, h, w
-        elif len(data['LR'].size()) == 5: #for networks that work with 3 channel images
-            if self.tensor_shape == 'CTHW':
-                _, _, n_frames, _, _ = data['LR'].size() # b, c, t, h, w
-            else: # TCHW
-                _, n_frames, _, _, _ = data['LR'].size() # b, t, c, h, w
-            LR = data['LR']
+        _, n_frames, _, _, _ = data['LR'].size() # b, t, c, h, w
+        LR = data['LR']
 
         self.idx_center = (n_frames - 1) // 2
         self.n_frames = n_frames
-
-        # LR images (LR_y_cube)
+        
         self.var_L = LR.to(self.device)
 
-        # bicubic upscaled LR and RGB center HR
-        if isinstance(data['HR_center'], torch.Tensor):
-            self.var_H_center = data['HR_center'].to(self.device)
-        else:
-            self.var_H_center = None
-        if isinstance(data['LR_bicubic'], torch.Tensor): 
-            self.var_LR_bic = data['LR_bicubic'].to(self.device)
-        else:
-            self.var_LR_bic = None
+        self.var_H_odd = data['HR_ODD'].to(self.device)
+        self.var_H_even = data['HR_EVEN'].to(self.device)
 
         if need_HR:  # train or val
-            # HR images
-            if len(data['HR'].size()) == 4:
-                HR = data['HR'].view(b, -1, 1, h_lr * self.scale, w_lr * self.scale) # b, t, c, h, w
-            elif len(data['HR'].size()) == 5: #for networks that work with 3 channel images
-                HR = data['HR'] # b, t, c, h, w 
-            self.var_H = HR.to(self.device)
-
             # discriminator references
-            input_ref = data.get('ref', data['HR'])
-            if len(input_ref.size()) == 4:
-                input_ref = input_ref.view(b, -1, 1, h_lr * self.scale, w_lr * self.scale) # b, t, c, h, w
-                self.var_ref = input_ref.to(self.device)
-            elif len(input_ref.size()) == 5: #for networks that work with 3 channel images    
-                self.var_ref = input_ref.to(self.device)
+            input_ref_odd = data.get('ref', data['HR_ODD'])
+            input_ref_even = data.get('ref', data['HR_EVEN']) 
+            self.var_ref_odd = input_ref_odd.to(self.device)
+            self.var_ref_even = input_ref_even.to(self.device)
 
     def feed_data_batch(self, data, need_HR=True):
         #TODO
@@ -258,10 +238,11 @@ class VSRModel(BaseModel):
         ### Network forward, generate SR
         with self.cast():
             # inference
-            self.fake_H = self.netG(self.var_L)
-            if not isinstance(self.fake_H, torch.Tensor) and len(self.fake_H) == 4:
-                flow_L1, flow_L2, flow_L3, self.fake_H = self.fake_H
-                # tmp_vis(self.fake_H)
+            self.ocf_flow_L1, self.ocf_flow_L2, self.ocf_flow_L3, self.ocf_output, self.ecf_flow_L1, self.ecf_flow_L2, self.ecf_flow_L3, self.ecf_output = self.netG(self.var_L)
+            tmp_vis(self.ocf_output)
+            tmp_vis(self.ecf_output)
+            # if not isinstance(self.fake_H, torch.Tensor) and len(self.fake_H) == 4:
+            #     flow_L1, flow_L2, flow_L3, self.fake_H = self.fake_H
         #/with self.cast():
 
         # batch (mixup) augmentations
@@ -272,14 +253,14 @@ class VSRModel(BaseModel):
         '''
 
         #TODO: TMP test to view samples of the optical flows
-        # tmp_vis(self.var_H[:, self.idx_center, :, :, :], True)
-        # print(flow_L1[0].shape)
-        # tmp_vis(flow_L1[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        # tmp_vis(flow_L2[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        # tmp_vis(flow_L3[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
-        # tmp_vis_flow(flow_L1[0])
-        # tmp_vis_flow(flow_L2[0])
-        # tmp_vis_flow(flow_L3[0])
+        # tmp_vis(self.var_H_odd[:, self.idx_center, :, :, :], True)
+        # print(self.ocf_flow_L1[0].shape)
+        # tmp_vis(self.ocf_flow_L1[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+        # tmp_vis(self.ocf_flow_L2[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+        # tmp_vis(self.ocf_flow_L3[0][:, 0:1, :, :], to_np=True, rgb2bgr=False)
+        # tmp_vis_flow(self.ocf_flow_L1[0])
+        # tmp_vis_flow(self.ocf_flow_L2[0])
+        # tmp_vis_flow(self.ocf_flow_L3[0])
         
         l_g_total = 0
         """
@@ -291,30 +272,29 @@ class VSRModel(BaseModel):
         if (self.cri_gan is not True) or (step % self.D_update_ratio == 0 and step > self.D_init_iters):
             with self.cast(): # Casts operations to mixed precision if enabled, else nullcontext
                 # get the central frame for SR losses
-                if isinstance(self.var_LR_bic, torch.Tensor) and isinstance(self.var_H_center, torch.Tensor):
-                    # tmp_vis(ycbcr_to_rgb(self.var_LR_bic), True)
-                    # print("fake_H:", self.fake_H.shape)
-                    fake_H_cb = self.var_LR_bic[:, 1, :, :].to(self.device)
-                    # print("fake_H_cb: ", fake_H_cb.shape)
-                    fake_H_cr = self.var_LR_bic[:, 2, :, :].to(self.device)
-                    # print("fake_H_cr: ", fake_H_cr.shape)
-                    centralSR = ycbcr_to_rgb(torch.stack((self.fake_H.squeeze(1), fake_H_cb, fake_H_cr), -3))
-                    # print("central rgb", centralSR.shape)
-                    # tmp_vis(centralSR, True)
-                    # centralHR = ycbcr_to_rgb(self.var_H_center) #Not needed, can send the rgb HR from dataloader
-                    centralHR = self.var_H_center
-                    # print(centralHR.shape)
-                    # tmp_vis(centralHR)
-                else: #if self.var_L.shape[2] == 1:
-                    centralSR = self.fake_H
-                    centralHR = self.var_H[:, :, self.idx_center, :, :] if self.tensor_shape == 'CTHW' else self.var_H[:, self.idx_center, :, :, :]
+
+                central_sr_odd = self.ocf_output
+                central_sr_even = self.ecf_output
+                central_hr_odd= self.var_H_odd[:, self.idx_center, :, :, :]
+                central_hr_even= self.var_H_even[:, self.idx_center, :, :, :]
+
+                lb, lt, lc, lh, lw = self.var_L.shape
+                odd_center_field = torch.zeros(lb, lt, lc, lh//2, lw).to(self.var_L.device)
+                even_center_field = torch.zeros_like(odd_center_field).to(self.var_L.device)
+                for i in range(self.n_frames):
+                    odd_center_field[:, i, :, :, :] = self.var_L[:, i, :, i%2::2, :]
+                    even_center_field[:, i, :, :, :] = self.var_L[:, i, :, (i+1)%2::2, :]
                 
                 # tmp_vis(torch.cat((centralSR, centralHR), -1))
 
                 # regular losses
                 # loss_SR = criterion(self.fake_H, self.var_H[:, idx_center, :, :, :]) #torch.nn.MSELoss()
-                loss_results, self.log_dict = self.generatorlosses(centralSR, 
-                                    centralHR, self.log_dict, self.f_low)
+                loss_results, self.log_dict = self.generatorlosses(central_sr_odd, 
+                                    central_hr_odd, self.log_dict, self.f_low)
+                l_g_total += sum(loss_results)/self.accumulations
+
+                loss_results, self.log_dict = self.generatorlosses(central_sr_odd, 
+                                    central_hr_odd, self.log_dict, self.f_low)
                 l_g_total += sum(loss_results)/self.accumulations
 
                 # optical flow reconstruction loss
@@ -324,25 +304,47 @@ class VSRModel(BaseModel):
                     l_g_ofr = 0
                     for i in range(self.n_frames):
                         if i != self.idx_center:
-                            loss_L1 = self.cri_ofr(F.avg_pool2d(self.var_L[:, i, :, :, :], kernel_size=2),
-                                            F.avg_pool2d(self.var_L[:, self.idx_center, :, :, :], kernel_size=2),
-                                            flow_L1[i])
-                            loss_L2 = self.cri_ofr(self.var_L[:, i, :, :, :], self.var_L[:, self.idx_center, :, :, :], flow_L2[i])
-                            loss_L3 = self.cri_ofr(self.var_H[:, i, :, :, :], self.var_H[:, self.idx_center, :, :, :], flow_L3[i])
+                            loss_L1 = self.cri_ofr(F.avg_pool2d(odd_center_field[:, i, :, :, :], kernel_size=2),
+                                            F.avg_pool2d(odd_center_field[:, self.idx_center, :, :, :], kernel_size=2),
+                                            self.ocf_flow_L1[i])
+                            loss_L2 = self.cri_ofr(odd_center_field[:, i, :, :, :], odd_center_field[:, self.idx_center, :, :, :], self.ocf_flow_L2[i])
+                            loss_L3 = self.cri_ofr(self.var_H_odd[:, i, :, 0::2, :], self.var_H_odd[:, self.idx_center, :, 0::2, :], self.ocf_flow_L3[i])
                             # ofr weights option. lambda2 = 0.2, lambda1 = 0.1 in the paper
                             l_g_ofr += loss_L3 + self.ofr_wl2 * loss_L2 + self.ofr_wl1 * loss_L1
 
                     # ofr weight option. lambda4 = 0.01 in the paper
                     l_g_ofr = self.ofr_weight * l_g_ofr / (self.n_frames - 1)
-                    self.log_dict['ofr'] = l_g_ofr.item()
+                    self.log_dict['ofr-o'] = l_g_ofr.item()
+                    l_g_total += l_g_ofr/self.accumulations
+
+                    l_g_ofr = 0
+                    for i in range(self.n_frames):
+                        if i != self.idx_center:
+                            loss_L1 = self.cri_ofr(F.avg_pool2d(even_center_field[:, i, :, :, :], kernel_size=2),
+                                            F.avg_pool2d(even_center_field[:, self.idx_center, :, :, :], kernel_size=2),
+                                            self.ecf_flow_L1[i])
+                            loss_L2 = self.cri_ofr(even_center_field[:, i, :, :, :], even_center_field[:, self.idx_center, :, :, :], self.ecf_flow_L2[i])
+                            loss_L3 = self.cri_ofr(self.var_H_even[:, i, :, 1::2, :], self.var_H_even[:, self.idx_center, :, 1::2, :], self.ecf_flow_L3[i])
+                            # ofr weights option. lambda2 = 0.2, lambda1 = 0.1 in the paper
+                            l_g_ofr += loss_L3 + self.ofr_wl2 * loss_L2 + self.ofr_wl1 * loss_L1
+
+                    # ofr weight option. lambda4 = 0.01 in the paper
+                    l_g_ofr = self.ofr_weight * l_g_ofr / (self.n_frames - 1)
+                    self.log_dict['ofr-e'] = l_g_ofr.item()
                     l_g_total += l_g_ofr/self.accumulations
 
                 if self.cri_gan:
                     # adversarial loss
                     l_g_gan = self.adversarial(
-                        centralSR, centralHR, netD=self.netD, 
+                        central_sr_odd, central_hr_odd, netD=self.netD, 
                         stage='generator', fsfilter = self.f_high) # (sr, hr)
-                    self.log_dict['l_g_gan'] = l_g_gan.item()
+                    self.log_dict['l_g_gan_odd'] = l_g_gan.item()
+                    l_g_total += l_g_gan/self.accumulations
+
+                    l_g_gan = self.adversarial(
+                        central_sr_even, central_hr_even, netD=self.netD, 
+                        stage='generator', fsfilter = self.f_high) # (sr, hr)
+                    self.log_dict['l_g_gan_even'] = l_g_gan.item()
                     l_g_total += l_g_gan/self.accumulations
 
             #/with self.cast():
@@ -350,7 +352,11 @@ class VSRModel(BaseModel):
             # high precision generator losses (can be affected by AMP half precision)
             if self.precisegeneratorlosses.loss_list:
                 precise_loss_results, self.log_dict = self.precisegeneratorlosses(
-                        centralSR, centralHR, self.log_dict, self.f_low)
+                        central_sr_odd, central_hr_odd, self.log_dict, self.f_low)
+                l_g_total += sum(precise_loss_results)/self.accumulations
+
+                precise_loss_results, self.log_dict = self.precisegeneratorlosses(
+                        central_sr_even, central_hr_even, self.log_dict, self.f_low)
                 l_g_total += sum(precise_loss_results)/self.accumulations
             
             if self.amp:
@@ -383,7 +389,11 @@ class VSRModel(BaseModel):
             
             with self.cast(): # Casts operations to mixed precision if enabled, else nullcontext
                 l_d_total, gan_logs = self.adversarial(
-                    centralSR, centralHR, netD=self.netD, 
+                    central_sr_odd, central_hr_odd, netD=self.netD, 
+                    stage='discriminator', fsfilter = self.f_high) # (sr, hr)
+
+                l_d_total, gan_logs = self.adversarial(
+                    central_sr_even, central_hr_even, netD=self.netD, 
                     stage='discriminator', fsfilter = self.f_high) # (sr, hr)
 
                 for g_log in gan_logs:
@@ -417,13 +427,11 @@ class VSRModel(BaseModel):
         with torch.no_grad():
             if self.is_train:
                 self.fake_H = self.netG(self.var_L)
-                if len(self.fake_H) == 4:
-                    _, _, _, self.fake_H = self.fake_H
+                _, _, _, self.fake_H_odd, _, _, _, self.fake_H_even = self.fake_H
             else:
                 #self.fake_H = self.netG(self.var_L, isTest=True)
                 self.fake_H = self.netG(self.var_L)
-                if len(self.fake_H) == 4:
-                    _, _, _, self.fake_H = self.fake_H
+                _, _, _, self.fake_H_odd, _, _, _, self.fake_H_even = self.fake_H
         self.netG.train()
 
     def get_current_log(self):
@@ -436,6 +444,10 @@ class VSRModel(BaseModel):
         out_dict['SR'] = self.fake_H.detach()[0].float().cpu()
         if need_HR:
             out_dict['HR'] = self.var_H.detach()[0].float().cpu()
+        #TODO for PPON ?
+        #if get stages 1 and 2
+            #out_dict['SR_content'] = ...
+            #out_dict['SR_structure'] = ...
         return out_dict
 
     def get_current_visuals_batch(self, need_HR=True):
@@ -445,4 +457,66 @@ class VSRModel(BaseModel):
         out_dict['SR'] = self.fake_H.detach().float().cpu()
         if need_HR:
             out_dict['HR'] = self.var_H.detach().float().cpu()
+        #TODO for PPON ?
+        #if get stages 1 and 2
+            #out_dict['SR_content'] = ...
+            #out_dict['SR_structure'] = ...
         return out_dict
+        
+    def print_network(self):
+        # Generator
+        s, n = self.get_network_description(self.netG)
+        if isinstance(self.netG, nn.DataParallel):
+            net_struc_str = '{} - {}'.format(self.netG.__class__.__name__,
+                                             self.netG.module.__class__.__name__)
+        else:
+            net_struc_str = '{}'.format(self.netG.__class__.__name__)
+
+        logger.info('Network G structure: {}, with parameters: {:,d}'.format(net_struc_str, n))
+        logger.info(s)
+        if self.is_train:
+            # Discriminator
+            if self.cri_gan:
+                s, n = self.get_network_description(self.netD)
+                if isinstance(self.netD, nn.DataParallel):
+                    net_struc_str = '{} - {}'.format(self.netD.__class__.__name__,
+                                                    self.netD.module.__class__.__name__)
+                else:
+                    net_struc_str = '{}'.format(self.netD.__class__.__name__)
+
+                logger.info('Network D structure: {}, with parameters: {:,d}'.format(net_struc_str, n))
+                logger.info(s)
+
+            #TODO: feature network is not being trained, is it necessary to visualize? Maybe just name?
+            # maybe show the generatorlosses instead?
+            '''
+            if self.generatorlosses.cri_fea:  # F, Perceptual Network
+                #s, n = self.get_network_description(self.netF)
+                s, n = self.get_network_description(self.generatorlosses.netF) #TODO
+                #s, n = self.get_network_description(self.generatorlosses.loss_list.netF) #TODO
+                if isinstance(self.generatorlosses.netF, nn.DataParallel):
+                    net_struc_str = '{} - {}'.format(self.generatorlosses.netF.__class__.__name__,
+                                                    self.generatorlosses.netF.module.__class__.__name__)
+                else:
+                    net_struc_str = '{}'.format(self.generatorlosses.netF.__class__.__name__)
+
+                logger.info('Network F structure: {}, with parameters: {:,d}'.format(net_struc_str, n))
+                logger.info(s)
+            '''
+
+    def load(self):
+        load_path_G = self.opt['path']['pretrain_model_G']
+        if load_path_G is not None:
+            logger.info('Loading pretrained model for G [{:s}] ...'.format(load_path_G))
+            strict = self.opt['path'].get('strict', None)
+            self.load_network(load_path_G, self.netG, strict)
+        if self.opt['is_train'] and self.opt['train']['gan_weight']:
+            load_path_D = self.opt['path']['pretrain_model_D']
+            if self.opt['is_train'] and load_path_D is not None:
+                logger.info('Loading pretrained model for D [{:s}] ...'.format(load_path_D))
+                self.load_network(load_path_D, self.netD)
+
+    def save(self, iter_step, latest=None):
+        self.save_network(self.netG, 'G', iter_step, latest)
+        if self.cri_gan:
+            self.save_network(self.netD, 'D', iter_step, latest)
