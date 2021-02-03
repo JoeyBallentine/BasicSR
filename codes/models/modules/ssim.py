@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from dataops.filters import *
@@ -252,7 +253,9 @@ class SSIM(nn.Module):
                
         if win is None: #generate gaussian kernel
             win = get_gaussian_kernel1d(window_size, window_sigma)
-            win = win.repeat(channels, 1, 1, 1)
+            # print(channels)
+            win = win.repeat(4, 1, 1, 1)
+            # print(win.shape)
         
         win_size = win.shape[-1]
         if not (win_size % 2 == 1):
