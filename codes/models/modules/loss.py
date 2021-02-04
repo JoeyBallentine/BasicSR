@@ -716,6 +716,8 @@ class Contextual_Loss(nn.Module):
         device = images.device
         
         if hasattr(self, 'vgg_model'):
+            images = images[:, :3, :, :]
+            gt = gt[:, :3, :, :]
             assert images.shape[1] == 3 and gt.shape[1] == 3,\
                 'VGG model takes 3 channel images.'
             
