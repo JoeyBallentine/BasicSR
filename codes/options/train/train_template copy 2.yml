@@ -1,8 +1,8 @@
-name: 2x_Gen5-Alpha-v2 # use "debug" or "debug_nochkp" in the name to run a test session and check everything is working. Does validation and state saving every 8 iterations.
+name: 8x_PokemonHomeSprites-Alpha # use "debug" or "debug_nochkp" in the name to run a test session and check everything is working. Does validation and state saving every 8 iterations.
 #name: 001_template # remove "debug" to run the real training session.
-use_tb_logger: true
+use_tb_logger: false
 model: srragan #srragan | sr | srgan | ppon | asrragan
-scale: 2
+scale: 8
 gpu_ids: [0]
 use_amp: true
 use_swa: false
@@ -12,7 +12,7 @@ datasets:
   train: 
     name: gen5
     mode: LRHRC
-    dataroot_HR: 'D:\Datasets\Pokemon\Gen 5\main-sprites\black-white' # Original, with a single directory
+    dataroot_HR: 'D:\Datasets\Large Pokemon\homeSprites' # Original, with a single directory
     # dataroot_LR: '../datasets/train/lr' # Original, with a single directory
     # dataroot_HR: [
     #   '../datasets/train/hr1', 
@@ -27,10 +27,10 @@ datasets:
     subset_file: null
     use_shuffle: true
     znorm: false # true | false # To normalize images in [-1, 1] range. Default = None (range [0,1]). Can use with activation function like tanh.
-    n_workers: 6 # 0 to disable CPU multithreading, or an integrer representing CPU threads to use for dataloading
-    batch_size: 8
-    virtual_batch_size: 8
-    HR_size: 96 # patch size. Default: 128. Needs to be coordinated with the patch size of the features network
+    n_workers: 4 # 0 to disable CPU multithreading, or an integrer representing CPU threads to use for dataloading
+    batch_size: 4
+    virtual_batch_size: 4
+    HR_size: 128 # patch size. Default: 128. Needs to be coordinated with the patch size of the features network
     image_channels: 4 # number of channels to load images in
 
     # Color space conversion: 'color' for both LR and HR, 'color_LR' for LR independently, 'color_HR' for HR independently
@@ -57,8 +57,8 @@ datasets:
     lr_blur: false # true | false
     lr_blur_types: {gaussian: 1, clean: 3} # select from: "average","box","gaussian","bilateral","clean" ##blur options #median and motion aren't working yet
     noise_data: ../noise_patches/normal/ # location of the noise patches extracted from real images to use for noise injection with noise option "patches"
-    lr_noise: false # true | false
-    lr_noise_types: {gaussian: 1, JPEG: 1, clean: 4} # select from: "gaussian", "JPEG", "quantize", "poisson", "dither", "s&p", "speckle", "patches", "clean"
+    lr_noise: true # true | false
+    lr_noise_types: {quantize: 1, clean: 4} # select from: "gaussian", "JPEG", "quantize", "poisson", "dither", "s&p", "speckle", "patches", "clean"
     lr_noise2: false # true | false
     lr_noise_types2: {dither: 2, clean: 2} # select from: "gaussian", "JPEG", "quantize", "poisson", "dither", "s&p", "speckle", "patches", "clean"
     hr_noise: false # true | false
@@ -81,9 +81,12 @@ datasets:
   val: 
     name: gen4
     mode: LRHRC
-    dataroot_HR: ['D:\Datasets\Pokemon\Gen 5\main-sprites\black-white\shiny\female', 'D:\Datasets\Pokemon\FanMade']
+    dataroot_HR: 'D:\Datasets\Large Pokemon\sugimori\female'
     # dataroot_LR: '../datasets/val/lr'
     image_channels: 4
+
+    lr_noise: true # true | false
+    lr_noise_types: {dither: 1, quantize: 1, clean: 4} # select from: "gaussian", "JPEG", "quantize", "poisson", "dither", "s&p", "speckle", "patches", "clean"
     
     znorm: false # true | false # To normalize images in [-1, 1] range. Default = None (range [0,1]). Can use with activation function like tanh.
     
@@ -99,13 +102,14 @@ path:
     strict: false # true | false 
     root: 'E:/Code/GitHub/BasicSR'
     # pretrain_model_G: 'C:\Users\Joey\Downloads\4x_FireAlpha.pth'
-    pretrain_model_G: 'E:/Code/GitHub/BasicSR/experiments/2x_Gen5-Alpha/models/latest_G.pth'
+    # pretrain_model_G: 'E:/Code/GitHub/BasicSR/experiments/2x_Gen5-Alpha/models/latest_G.pth'
+    pretrain_model_G: 'E:/Code/GitHub/BasicSR/experiments/4x_PocketMonsters-Alpha/models/latest_G.pth'
     # pretrain_model_G: '../experiments/pretrained_models/RRDB_PSNR_x4.pth'
     #pretrain_model_G: '../experiments/pretrained_models/RRDB_ESRGAN_x4.pth'
     #pretrain_model_G: '../experiments/pretrained_models/nESRGANplus.pth'
     #pretrain_model_G: '../experiments/pretrained_models/PPON_G.pth'
     # pretrain_model_G: '../experiments/pretrained_models/PANx4_DF2K.pth'
-    resume_state: 'E:/Code/GitHub/BasicSR/experiments/2x_Gen5-Alpha-v2/training_state/latest.state'
+    # resume_state: 'E:/Code/GitHub/BasicSR/experiments/4x_PocketMonsters-Alpha/training_state/latest.state'
 
 # Generator options:
 network_G:
@@ -247,10 +251,10 @@ train:
     pixel_criterion: cb # "l1" | "l2" | "cb" | "elastic" | "relativel1" | "l1cosinesim" | "clipl1" #pixel loss
     pixel_weight: 1e-2 # 1e-2 | 1
     # feature_criterion: l1 # "l1" | "l2" | "cb" | "elastic" #feature loss (VGG feature network)
-    feature_weight: 1
-    # cx_weight: 0.5
-    # cx_type: contextual
-    # cx_vgg_layers: {conv_3_2: 1, conv_4_2: 1}
+    # feature_weight: 1
+    cx_weight: 0.5
+    cx_type: contextual
+    cx_vgg_layers: {conv_3_2: 1, conv_4_2: 1}
     # hfen_criterion: l1 # hfen: "l1" | "l2" | "rel_l1" | "rel_l2" #helps in deblurring and finding edges, lines
     # hfen_weight: 1e-6 
     # grad_type: grad-4d-l1 # 2d | 4d / - any of the pixel crit, ie "grad-2d-l1"
