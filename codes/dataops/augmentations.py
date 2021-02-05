@@ -247,6 +247,9 @@ class RandomQuantize(object):
         Returns:
             np.ndarray: Quantized image.
         """
+        if img.shape[2] > 3:
+            alpha = img[:, :, 3:]
+            img = img[:, :, :3]
         if random.random() < self.p:
 
             img_type = img.dtype
@@ -274,6 +277,8 @@ class RandomQuantize(object):
             for i, q in enumerate(qnt): 
                 clustered[np.unravel_index(i, dims=(img.shape[0], img.shape[1]))] = q
             img = np.clip(clustered, 0, img_max).astype(img_type)
+        if isinstance(alpha, np.ndarray):
+            img = np.concatenate([img, alpha], 2)
         return img
 
     def __repr__(self):
